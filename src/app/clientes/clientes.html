@@ -1,0 +1,55 @@
+<section class="pagina">
+  <div class="fila-titulo">
+    <h1>Clientes</h1>
+    <button type="button" class="texto" (click)="formulario.set(!formulario())">
+      {{ formulario() ? 'Cerrar' : 'Nuevo' }}
+    </button>
+  </div>
+
+  @if (formulario()) {
+    <form class="bloque" (ngSubmit)="guardar()">
+      <label>
+        Nombre
+        <input [(ngModel)]="nombre" name="nombre" />
+      </label>
+      <label>
+        Teléfono
+        <input [(ngModel)]="telefono" name="telefono" />
+      </label>
+      <label>
+        Correo
+        <input [(ngModel)]="correo" name="correo" />
+      </label>
+      <label>
+        Objetivo
+        <input [(ngModel)]="objetivo" name="objetivo" />
+      </label>
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+      <button class="primario" type="submit">Guardar cliente</button>
+    </form>
+  }
+
+  <label>
+    Buscar
+    <input [value]="busqueda()" placeholder="Nombre o teléfono" (input)="busqueda.set(texto($event))" />
+  </label>
+
+  @if (lista().length === 0) {
+    <p class="vacio">No hay clientes con esa búsqueda.</p>
+  }
+  <ul class="lista">
+    @for (cliente of lista(); track cliente.id) {
+      <li>
+        <a class="fila" [routerLink]="['/clientes', cliente.id]">
+          <span class="avatar">{{ iniciales(cliente.nombre) }}</span>
+          <span>
+            <strong>{{ cliente.nombre }}</strong>
+            <small>{{ cliente.objetivo || cliente.telefono }}</small>
+          </span>
+        </a>
+      </li>
+    }
+  </ul>
+</section>

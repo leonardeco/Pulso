@@ -1,0 +1,59 @@
+@if (lista()) {
+  <section class="pagina">
+    <h1>Listo</h1>
+    <p class="bajada">
+      La cita quedó el {{ etiqueta(fechaConfirmada()) }} a las {{ horaConfirmada() }}. El cliente ya está en la lista.
+    </p>
+    <button type="button" class="primario" (click)="lista.set(false)">Reservar otra</button>
+  </section>
+} @else {
+  <section class="pagina">
+    <h1>Reservar</h1>
+    <p class="bajada">Elige el servicio, el día y una hora libre. Si el teléfono ya existe, se usa ese cliente.</p>
+
+    <div class="opciones">
+      @for (item of pulso.estado().servicios; track item.id) {
+        <button type="button" class="opcion" [class.activa]="item.id === servicioId()" (click)="elegirServicio(item.id)">
+          <strong>{{ item.nombre }}</strong>
+          <small>{{ item.minutos }} min · {{ pesos(item.precio) }}</small>
+        </button>
+      }
+    </div>
+
+    <div class="semana larga">
+      @for (dia of dias; track dia) {
+        <button type="button" class="dia" [class.activo]="dia === fecha()" (click)="elegirDia(dia)">
+          <small>{{ etiqueta(dia).split(' ')[0] }}</small>
+          <b>{{ numeroDia(dia) }}</b>
+        </button>
+      }
+    </div>
+
+    <h2>Horas del {{ etiqueta(fecha()) }}</h2>
+    @if (libres().length === 0) {
+      <p class="vacio">No hay horas libres este día.</p>
+    }
+    <div class="horas">
+      @for (item of libres(); track item) {
+        <button type="button" class="hora" [class.activa]="item === hora()" (click)="hora.set(item)">{{ item }}</button>
+      }
+    </div>
+
+    <label>
+      Nombre
+      <input [(ngModel)]="nombre" name="nombre" />
+    </label>
+    <label>
+      Teléfono
+      <input [(ngModel)]="telefono" name="telefono" inputmode="tel" />
+    </label>
+    <label>
+      Correo
+      <input [(ngModel)]="correo" name="correo" type="email" />
+    </label>
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+    <button type="button" class="primario" (click)="confirmar()">Confirmar cita</button>
+  </section>
+}

@@ -1,0 +1,271 @@
+@if (!cliente()) {
+  <section class="pagina">
+    <h1>Cliente no encontrado</h1>
+    <a class="primario" routerLink="/clientes">Volver a clientes</a>
+  </section>
+} @else {
+  <section class="pagina">
+    <a class="texto" routerLink="/clientes">Volver</a>
+    <h1>{{ cliente()!.nombre }}</h1>
+    <p class="bajada">{{ cliente()!.objetivo || 'Sin objetivo anotado' }}</p>
+
+    <div class="pestanas">
+      <button type="button" [class.activa]="pestana === 'datos'" (click)="pestana = 'datos'">Datos</button>
+      <button type="button" [class.activa]="pestana === 'rutina'" (click)="pestana = 'rutina'">Rutina</button>
+      <button type="button" [class.activa]="pestana === 'comidas'" (click)="pestana = 'comidas'">Comidas</button>
+      <button type="button" [class.activa]="pestana === 'pagos'" (click)="pestana = 'pagos'">Pagos</button>
+    </div>
+
+    @if (pestana === 'datos') {
+      <label>
+        Nombre
+        <input [value]="cliente()!.nombre" (change)="campo('nombre', $event)" />
+      </label>
+      <label>
+        Teléfono
+        <input [value]="cliente()!.telefono" (change)="campo('telefono', $event)" />
+      </label>
+      <label>
+        Correo
+        <input [value]="cliente()!.correo" (change)="campo('correo', $event)" />
+      </label>
+      <label>
+        Objetivo
+        <input [value]="cliente()!.objetivo" (change)="campo('objetivo', $event)" />
+      </label>
+      <div class="par">
+        <label>
+          Peso (kg)
+          <input [value]="cliente()!.peso" (change)="campo('peso', $event)" />
+        </label>
+        <label>
+          Estatura (cm)
+          <input [value]="cliente()!.estatura" (change)="campo('estatura', $event)" />
+        </label>
+      </div>
+      <label>
+        Notas
+        <textarea rows="4" [value]="cliente()!.notas" (change)="campo('notas', $event)"></textarea>
+      </label>
+
+      <h2>Próximas citas</h2>
+      @if (citas().length === 0) {
+        <p class="vacio">Todavía no tiene citas.</p>
+      }
+      <ul class="lista">
+        @for (cita of citas(); track cita.id) {
+          <li class="fila estatica">
+            <b>{{ cita.hora }}</b>
+            <span>
+              <strong>{{ cita.fecha }}</strong>
+              <small>{{ servicio(cita.servicioId)?.nombre || 'Sesión' }} · {{ cita.estado }}</small>
+            </span>
+          </li>
+        }
+      </ul>
+      <button type="button" class="peligro-suave" (click)="borrarCliente()">Quitar cliente</button>
+    }
+
+    @if (pestana === 'rutina') {
+      <div class="fila-titulo">
+        <h2>Rutinas</h2>
+        <button type="button" class="texto" (click)="pulso.nuevaRutina(cliente()!.id)">Nueva</button>
+      </div>
+      @if (plantillas().length > 0) {
+        <label>
+          Copiar plantilla
+          <select (change)="usarPlantilla($event)">
+            <option value="">Elegir</option>
+            @for (plantilla of plantillas(); track plantilla.id) {
+              <option [value]="plantilla.id">{{ plantilla.nombre }}</option>
+            }
+          </select>
+        </label>
+      }
+      @if (rutinas().length === 0) {
+        <p class="vacio">Este cliente todavía no tiene rutina.</p>
+      }
+      @for (rutina of rutinas(); track rutina.id) {
+        <article class="tarjeta">
+          <label>
+            Nombre de la rutina
+            <input [value]="rutina.nombre" (change)="pulso.cambiarRutina(rutina.id, { nombre: texto($event) })" />
+          </label>
+          @for (dia of rutina.dias; track dia.id) {
+            <div class="dia-rutina">
+              <label>
+                Día
+                <input [value]="dia.nombre" (change)="pulso.cambiarDia(rutina.id, dia.id, texto($event))" />
+              </label>
+              @for (ejercicio of dia.ejercicios; track ejercicio.id) {
+                <div class="ejercicio">
+                  <label>
+                    Ejercicio
+                    <input
+                      list="ejercicios"
+                      [value]="ejercicio.nombre"
+                      (change)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { nombre: texto($event) })"
+                    />
+                  </label>
+                  <div class="tres">
+                    <label>
+                      Series
+                      <input
+                        [value]="ejercicio.series"
+                        (change)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { series: texto($event) })"
+                      />
+                    </label>
+                    <label>
+                      Reps
+                      <input
+                        [value]="ejercicio.reps"
+                        (change)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { reps: texto($event) })"
+                      />
+                    </label>
+                    <label>
+                      Descanso
+                      <input
+                        [value]="ejercicio.descanso"
+                        (change)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { descanso: texto($event) })"
+                      />
+                    </label>
+                  </div>
+                  <button type="button" class="texto peligro" (click)="pulso.quitarEjercicio(rutina.id, dia.id, ejercicio.id)">
+                    Quitar ejercicio
+                  </button>
+                </div>
+              }
+              <div class="botones">
+                <button type="button" class="secundario" (click)="pulso.agregarEjercicio(rutina.id, dia.id)">
+                  Agregar ejercicio
+                </button>
+                <button type="button" class="texto" (click)="pulso.quitarDia(rutina.id, dia.id)">Quitar día</button>
+              </div>
+            </div>
+          }
+          <div class="botones">
+            <button type="button" class="secundario" (click)="pulso.agregarDia(rutina.id)">Agregar día</button>
+            <button type="button" class="texto" (click)="pulso.copiarRutina(rutina.id, null)">Guardar como plantilla</button>
+            <button type="button" class="texto peligro" (click)="pulso.eliminarRutina(rutina.id)">Borrar rutina</button>
+          </div>
+        </article>
+      }
+      <datalist id="ejercicios">
+        @for (nombre of ejercicios; track nombre) {
+          <option [value]="nombre"></option>
+        }
+      </datalist>
+    }
+
+    @if (pestana === 'comidas') {
+      <div class="fila-titulo">
+        <h2>Alimentación</h2>
+        <button type="button" class="texto" (click)="pulso.nuevaTabla(cliente()!.id)">Nueva tabla</button>
+      </div>
+      <p class="bajada">Guía de trabajo del entrenador. No reemplaza una valoración médica.</p>
+      @if (tablas().length === 0) {
+        <p class="vacio">Todavía no hay tabla para este cliente.</p>
+      }
+      @for (tabla of tablas(); track tabla.id) {
+        <article class="tarjeta">
+          <label>
+            Nombre
+            <input [value]="tabla.nombre" (change)="pulso.cambiarTabla(tabla.id, texto($event))" />
+          </label>
+          @for (fila of tabla.filas; track fila.id) {
+            <div class="comida">
+              <label>
+                Momento
+                <select [value]="fila.momento" (change)="pulso.cambiarFila(tabla.id, fila.id, { momento: texto($event) })">
+                  @for (momento of momentos; track momento) {
+                    <option [value]="momento">{{ momento }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Alimento
+                <input [value]="fila.alimento" (change)="pulso.cambiarFila(tabla.id, fila.id, { alimento: texto($event) })" />
+              </label>
+              <label>
+                Cantidad
+                <input [value]="fila.cantidad" (change)="pulso.cambiarFila(tabla.id, fila.id, { cantidad: texto($event) })" />
+              </label>
+              <label>
+                Nota
+                <input [value]="fila.nota" (change)="pulso.cambiarFila(tabla.id, fila.id, { nota: texto($event) })" />
+              </label>
+              <button type="button" class="texto peligro" (click)="pulso.quitarFila(tabla.id, fila.id)">Quitar</button>
+            </div>
+          }
+          <div class="botones">
+            <button type="button" class="secundario" (click)="pulso.agregarFila(tabla.id)">Agregar comida</button>
+            <button type="button" class="texto peligro" (click)="pulso.eliminarTabla(tabla.id)">Borrar tabla</button>
+          </div>
+        </article>
+      }
+    }
+
+    @if (pestana === 'pagos') {
+      <h2>Cobro del mes</h2>
+      <p class="bajada">La mensualidad y la valoración se cobran cada mes, por separado.</p>
+      <div class="par">
+        <label>
+          Mensualidad
+          <input inputmode="numeric" [value]="cliente()!.mensualidad" (change)="tarifa('mensualidad', $event)" />
+        </label>
+        <label>
+          Valoración
+          <input inputmode="numeric" [value]="cliente()!.valoracionMensual" (change)="tarifa('valoracionMensual', $event)" />
+        </label>
+      </div>
+      @if (cliente()!.mensualidad <= 0 && cliente()!.valoracionMensual <= 0) {
+        <p class="bajada">Escribe la mensualidad y la valoración. Con eso se arman los cobros del mes.</p>
+      } @else if (mesCubierto()) {
+        <p class="bajada">{{ nombrePeriodo }} ya tiene esos dos cobros.</p>
+      } @else {
+        <button type="button" class="primario" (click)="generarMes()">Generar cobros de {{ nombrePeriodo }}</button>
+      }
+
+      <h2>Otro cobro</h2>
+      <form class="bloque" (ngSubmit)="cobrar()">
+        <label>
+          Concepto
+          <input [(ngModel)]="concepto" name="concepto" />
+        </label>
+        <label>
+          Valor
+          <input [(ngModel)]="valor" name="valor" type="number" inputmode="numeric" />
+        </label>
+        <button class="primario" type="submit">Anotar cobro</button>
+      </form>
+      <ul class="lista">
+        @for (pago of pagos(); track pago.id) {
+          <li class="tarjeta">
+            <div class="fila estatica">
+              <span>
+                <strong>{{ pago.concepto }}</strong>
+                <small>
+                  @if (pago.periodo) {
+                    {{ etiquetaPeriodo(pago.periodo) }} ·
+                  }
+                  {{ pago.fecha }} · {{ pesos(pago.valor) }}
+                </small>
+              </span>
+              <b [class.pagado]="pago.estado === 'pagado'">{{ pago.estado }}</b>
+            </div>
+            <div class="botones">
+              <button
+                type="button"
+                class="secundario"
+                (click)="pulso.cambiarPago(pago.id, { estado: pago.estado === 'pagado' ? 'pendiente' : 'pagado' })"
+              >
+                {{ pago.estado === 'pagado' ? 'Marcar pendiente' : 'Marcar pagado' }}
+              </button>
+              <button type="button" class="texto peligro" (click)="pulso.eliminarPago(pago.id)">Quitar</button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}

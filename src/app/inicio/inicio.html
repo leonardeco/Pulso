@@ -1,0 +1,81 @@
+<section class="pagina">
+  <h1>Hoy</h1>
+  <p class="bajada">
+    {{ etiqueta(hoy) }}.
+    @if (citasHoy().length === 0) {
+      No hay citas en el día.
+    } @else {
+      {{ citasHoy().length }}
+      {{ citasHoy().length === 1 ? 'cita en la agenda.' : 'citas en la agenda.' }}
+    }
+  </p>
+
+  <div class="resumen">
+    <article>
+      <span>Citas</span>
+      <strong>{{ citasHoy().length }}</strong>
+    </article>
+    <article>
+      <span>Clientes</span>
+      <strong>{{ pulso.estado().clientes.length }}</strong>
+    </article>
+    <article>
+      <span>Por cobrar</span>
+      <strong>{{ pesos(totalPorCobrar()) }}</strong>
+    </article>
+  </div>
+
+  <section class="bloque">
+    <div class="fila-titulo">
+      <h2>Agenda de hoy</h2>
+      <a routerLink="/agenda">Ver semana</a>
+    </div>
+    @if (citasHoy().length === 0) {
+      <p class="vacio">Cuando alguien reserve, la cita aparece aquí.</p>
+    }
+    <ul class="lista">
+      @for (cita of citasHoy(); track cita.id) {
+        <li>
+          <a class="fila" [routerLink]="['/clientes', cita.clienteId]">
+            <b>{{ cita.hora }}</b>
+            <span>
+              <strong>{{ cliente(cita.clienteId)?.nombre || 'Cliente' }}</strong>
+              <small>{{ servicio(cita.servicioId)?.nombre || 'Sesión' }} · {{ cita.estado }}</small>
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  </section>
+
+  <div class="acciones">
+    <a class="primario" routerLink="/reserva">Nueva reserva</a>
+    <a class="secundario" routerLink="/clientes">Ver clientes</a>
+  </div>
+
+  <section class="bloque">
+    <div class="fila-titulo">
+      <h2>Servicios</h2>
+      <button type="button" class="texto" (click)="nuevoServicio()">Agregar</button>
+    </div>
+    @for (servicio of pulso.estado().servicios; track servicio.id) {
+      <div class="rejilla-servicio">
+        <label>
+          Nombre
+          <input [value]="servicio.nombre" (input)="cambiarServicio(servicio, 'nombre', $event)" />
+        </label>
+        <label>
+          Minutos
+          <input inputmode="numeric" [value]="servicio.minutos" (input)="cambiarServicio(servicio, 'minutos', $event)" />
+        </label>
+        <label>
+          Precio
+          <input inputmode="numeric" [value]="servicio.precio" (input)="cambiarServicio(servicio, 'precio', $event)" />
+        </label>
+        <button type="button" class="texto peligro" (click)="pulso.eliminarServicio(servicio.id)">Quitar</button>
+      </div>
+    }
+  </section>
+
+  <button type="button" class="peligro-suave" (click)="reiniciar()">Volver a los datos de ejemplo</button>
+</section>

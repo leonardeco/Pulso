@@ -1,0 +1,18 @@
+<header class="topbar">
+  <a class="marca" routerLink="/">
+    <img src="pulso-logo.jpg" alt="" width="36" height="36" />
+    Pulso
+  </a>
+  <p>Estudio del entrenador</p>
+</header>
+
+<main>
+  <router-outlet />
+</main>
+
+<nav class="nav">
+  <a routerLink="/" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
+  <a routerLink="/agenda" routerLinkActive="activo">Agenda</a>
+  <a routerLink="/reserva" routerLinkActive="activo">Reservar</a>
+  <a routerLink="/clientes" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Clientes</a>
+</nav>

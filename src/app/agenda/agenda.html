@@ -1,0 +1,65 @@
+<section class="pagina">
+  <h1>Agenda</h1>
+  <div class="semana">
+    @for (dia of dias; track dia) {
+      <button type="button" class="dia" [class.activo]="dia === fecha()" (click)="fecha.set(dia)">
+        <small>{{ corto(dia) }}</small>
+        <b>{{ numeroDia(dia) }}</b>
+      </button>
+    }
+  </div>
+  <p class="bajada">{{ etiqueta(fecha()) }}</p>
+
+  @if (citas().length === 0) {
+    <p class="vacio">Este día está libre.</p>
+  }
+  <ul class="lista">
+    @for (cita of citas(); track cita.id) {
+      <li class="tarjeta">
+        <a class="fila" [routerLink]="['/clientes', cita.clienteId]">
+          <b>{{ cita.hora }}</b>
+          <span>
+            <strong>{{ cliente(cita.clienteId)?.nombre || 'Cliente' }}</strong>
+            <small>
+              {{ servicio(cita.servicioId)?.nombre || 'Sesión' }}
+              @if (servicio(cita.servicioId); as item) {
+                · {{ item.minutos }} min
+              }
+              · {{ cita.estado }}
+            </small>
+          </span>
+        </a>
+        @if (cita.estado !== 'cancelada') {
+          <div class="botones">
+            @if (cita.estado !== 'realizada') {
+              <button type="button" class="secundario" (click)="pulso.cambiarCita(cita.id, 'realizada')">Marcar hecha</button>
+            }
+            <button type="button" class="secundario" (click)="pulso.cambiarCita(cita.id, 'cancelada')">Cancelar</button>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+
+  <section class="bloque">
+    <h2>Horario de atención</h2>
+    <p class="bajada">Las reservas solo ofrecen horas dentro de estos bloques.</p>
+    @for (dia of diasSemana; track dia.id) {
+      <div class="horario-dia">
+        <strong>{{ dia.nombre }}</strong>
+        @for (bloque of bloques(dia.id); track $index) {
+          <div class="horario-bloque">
+            <input type="time" [value]="bloque[0]" (change)="pulso.cambiarBloque(dia.id, $index, 0, hora($event))" />
+            <span>a</span>
+            <input type="time" [value]="bloque[1]" (change)="pulso.cambiarBloque(dia.id, $index, 1, hora($event))" />
+            <button type="button" class="texto" (click)="pulso.quitarBloque(dia.id, $index)">Quitar</button>
+          </div>
+        }
+        @if (bloques(dia.id).length === 0) {
+          <small class="vacio">No atiende</small>
+        }
+        <button type="button" class="texto" (click)="pulso.agregarBloque(dia.id)">Agregar bloque</button>
+      </div>
+    }
+  </section>
+</section>
