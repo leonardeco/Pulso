@@ -562,3 +562,155 @@ test('R4 Salir con un 4xx nuevo en el vaciado avisa y el segundo clic sale', asy
   await expect(pa).toHaveURL(/\/entrar$/);
   await a.close();
 });
+
+test('TC-3.3 servidor caído en /entrar: avisa sin conexión y no toca localStorage', async ({ browser }) => {
+  const semilla = sembrarLocal(correo('t33'), CLAVE, 'clave-original-cliente', correo('leg'));
+  const a = await dispositivo(browser);
+  await a.addInitScript((s) => {
+    if (!localStorage.getItem('pulso.cuentas.v1')) {
+      localStorage.setItem('pulso.cuentas.v1', s.cuentas);
+      localStorage.setItem(`pulso.estado.${s.id}`, s.estado);
+    }
+  }, semilla);
+  const pa = await a.newPage();
+  await pa.route('**/api/sesion', (ruta) => (ruta.request().method() === 'GET' ? ruta.abort() : ruta.fallback()));
+  await pa.goto('/entrar');
+  const alerta = pa.getByRole('alert');
+  await expect(alerta).toBeVisible();
+  await expect(alerta).toHaveText('No pude conectar. Revisa tu internet e inténtalo de nuevo.');
+  const local = await pa.evaluate(
+    (id) => ({ cuentas: localStorage.getItem('pulso.cuentas.v1'), estado: localStorage.getItem(`pulso.estado.${id}`) }),
+    semilla.id,
+  );
+  expect(local.cuentas).toBe(semilla.cuentas);
+  expect(local.estado).toBe(semilla.estado);
+  await a.close();
+});
+
+test('TC-4.3 el servidor con datos gana al local distinto; la copia local queda intacta', async ({ browser }) => {
+  const mail = correo('t43');
+  const a = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Del Servidor');
+
+  const semilla = sembrarLocal(mail, CLAVE, 'clave-original-cliente', correo('leg'));
+  const b = await dispositivo(browser);
+  await b.addInitScript((s) => {
+    if (!localStorage.getItem('pulso.cuentas.v1')) {
+      localStorage.setItem('pulso.cuentas.v1', s.cuentas);
+      localStorage.setItem(`pulso.estado.${s.id}`, s.estado);
+    }
+  }, semilla);
+  const pb = await b.newPage();
+  const puts: string[] = [];
+  const registros: string[] = [];
+  pb.on('request', (r) => {
+    if (r.url().endsWith('/api/estudio') && r.method() === 'PUT') puts.push(r.url());
+    if (r.url().endsWith('/api/registro') && r.method() === 'POST') registros.push(r.url());
+  });
+
+  // Una clave que no coincide ni con el servidor ni con la copia local no dispara registro.
+  await pb.goto('/entrar');
+  await pb.locator('input[name=correo]').fill(mail);
+  const boton = pb.getByRole('button', { name: 'Entrar', exact: true });
+  await escribirClave(pb.locator('input[name=clave]'), 'otra-clave-distinta-1', boton);
+  const rechazada = pb.waitForResponse((r) => r.url().endsWith('/api/entrar') && r.status() === 401);
+  await boton.click();
+  await rechazada;
+  await expect(pb.getByRole('alert')).toHaveText('Correo o contraseña no coinciden.');
+  expect(registros).toHaveLength(0);
+
+  await entrar(pb, mail);
+  await pb.goto('/clientes');
+  await expect(pb.getByText('Cliente Del Servidor')).toBeVisible();
+  await expect(pb.getByText('Cliente Legado')).toHaveCount(0);
+  await expect(pb.getByText('Segundo Local')).toHaveCount(0);
+  await pb.waitForTimeout(1000);
+  expect(puts).toHaveLength(0);
+  expect(registros).toHaveLength(0);
+
+  const local = await pb.evaluate(
+    (id) => ({
+      cuentas: localStorage.getItem('pulso.cuentas.v1'),
+      estado: localStorage.getItem(`pulso.estado.${id}`),
+    }),
+    semilla.id,
+  );
+  expect(local.cuentas).toBe(semilla.cuentas);
+  expect(local.estado).toBe(semilla.estado);
+  const servidor = await (await b.request.get('/api/estudio')).text();
+  expect(servidor).toContain('Cliente Del Servidor');
+  expect(servidor).not.toContain('Cliente Legado');
+  await a.close();
+  await b.close();
+});
+
+test('TC-6.4 Salir guarda lo pendiente antes de cerrar la sesión y vacía el estado', async ({ browser }) => {
+  const mail = correo('t64');
+  const a = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Previo');
+  await abrirFicha(pa, 'Cliente Previo');
+
+  const orden: string[] = [];
+  pa.on('request', (r) => {
+    if (esPut({ url: () => r.url(), request: () => r })) orden.push('PUT');
+    if (r.url().endsWith('/api/sesion') && r.method() === 'DELETE') orden.push('DELETE');
+  });
+  await editarObjetivo(pa, 'Pendiente al salir');
+  await pa.getByRole('button', { name: 'Salir' }).click(); // dentro del debounce de 600 ms
+  await expect(pa).toHaveURL(/\/entrar$/);
+  expect(orden).toEqual(['PUT', 'DELETE']);
+
+  // Otro usuario en el mismo navegador no ve los datos anteriores.
+  await registrar(pa, correo('t64b'));
+  await pa.goto('/clientes');
+  await expect(pa.getByRole('link', { name: 'Clientes', exact: true })).toBeVisible();
+  await expect(pa.getByText('Cliente Previo')).toHaveCount(0);
+
+  // Y lo pendiente sí llegó al servidor de la primera cuenta.
+  await pa.getByRole('button', { name: 'Salir' }).click();
+  await expect(pa).toHaveURL(/\/entrar$/);
+  await entrar(pa, mail);
+  await abrirFicha(pa, 'Cliente Previo');
+  await expect(pa.getByLabel('Objetivo', { exact: true })).toHaveValue('Pendiente al salir');
+  await a.close();
+});
+
+test('TC-X.2 pagehide con cambios pendientes envía un PUT keepalive', async ({ browser }) => {
+  const mail = correo('tx2');
+  const a = await dispositivo(browser);
+  await a.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    const w = window as unknown as { __envios: { url: string; metodo: string; keepalive: boolean }[] };
+    w.__envios = [];
+    window.fetch = (entrada, init) => {
+      const url = typeof entrada === 'string' ? entrada : entrada instanceof URL ? entrada.href : entrada.url;
+      w.__envios.push({ url, metodo: (init?.method ?? 'GET').toUpperCase(), keepalive: init?.keepalive === true });
+      return original(entrada, init);
+    };
+  });
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Cierre');
+  await abrirFicha(pa, 'Cliente Cierre');
+
+  const campo = pa.getByLabel('Objetivo', { exact: true });
+  await pa.evaluate(() => ((window as unknown as { __envios: unknown[] }).__envios.length = 0));
+  await campo.fill('Cambio al cerrar');
+  await campo.blur();
+  await pa.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
+
+  const envios = await pa.evaluate(
+    () => (window as unknown as { __envios: { url: string; metodo: string; keepalive: boolean }[] }).__envios,
+  );
+  const puts = envios.filter((e) => e.metodo === 'PUT' && e.url.includes('/api/estudio'));
+  expect(puts.length).toBeGreaterThanOrEqual(1);
+  expect(puts[0].keepalive).toBe(true);
+  await expect
+    .poll(async () => (await (await a.request.get('/api/estudio')).text()).includes('Cambio al cerrar'))
+    .toBe(true);
+  await a.close();
+});

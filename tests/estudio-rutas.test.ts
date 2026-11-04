@@ -281,4 +281,19 @@ describeDb('rutas del estudio', () => {
       esAdmin: false,
     });
   }, 60000);
+
+  it('TC-2.2 dos guardados seguidos dan N+1 y N+2 sin 409', async () => {
+    const a = await nuevo('dobles@x.com');
+    const antes = (await get(a)).version;
+    const r1 = await put(a, antes, estadoCon('g1'));
+    expect(r1.status).toBe(200);
+    const v1 = ((await r1.json()) as { version: number }).version;
+    expect(v1).toBe(antes + 1);
+    const r2 = await put(a, v1, estadoCon('g1', 'g2'));
+    expect(r2.status).toBe(200);
+    expect(((await r2.json()) as { version: number }).version).toBe(antes + 2);
+    const final = await get(a);
+    expect(final.version).toBe(antes + 2);
+    expect(final.estado.clientes.map((c) => c.id)).toEqual(['g1', 'g2']);
+  }, 60000);
 });

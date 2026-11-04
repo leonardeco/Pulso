@@ -74,4 +74,46 @@ describeDb('cuenta', () => {
     const c = pedido('DELETE', '/api/sesion', undefined, undefined, malo);
     expect((await salir(c)).status).toBe(403);
   });
+  it('TC-5.2 límites de clave, nombre y correo; el correo se normaliza', async () => {
+    let n = 0;
+    const reg = async (campos: { nombre?: string; correo?: string; clave?: string }) => {
+      n += 1;
+      const cuerpo = { nombre: 'Ana', correo: `l${n}@x.com`, clave: 'secreta123', ...campos };
+      const r = await registro(pedido('POST', '/api/registro', cuerpo, undefined, ip(`7.7.7.${n}`)));
+      const texto = (await r.json()) as { error?: string };
+      return { status: r.status, error: texto.error };
+    };
+    const MSG_CLAVE = 'La contraseña necesita al menos 8 caracteres.';
+    const MSG_NOMBRE = 'Escribe tu nombre.';
+    const MSG_CORREO = 'Escribe un correo válido.';
+
+    expect(await reg({ clave: 'a'.repeat(7) })).toEqual({ status: 400, error: MSG_CLAVE });
+    expect((await reg({ clave: 'a'.repeat(8) })).status).toBe(200);
+    expect((await reg({ clave: 'a'.repeat(200) })).status).toBe(200);
+    expect(await reg({ clave: 'a'.repeat(201) })).toEqual({ status: 400, error: MSG_CLAVE });
+
+    expect(await reg({ nombre: 'A' })).toEqual({ status: 400, error: MSG_NOMBRE });
+    expect((await reg({ nombre: 'Ab' })).status).toBe(200);
+    expect((await reg({ nombre: 'a'.repeat(120) })).status).toBe(200);
+    expect(await reg({ nombre: 'a'.repeat(121) })).toEqual({ status: 400, error: MSG_NOMBRE });
+
+    const largo = (total: number) => `${'a'.repeat(total - '@x.com'.length)}@x.com`;
+    expect(largo(255)).toHaveLength(255);
+    expect(await reg({ correo: largo(255) })).toEqual({ status: 400, error: MSG_CORREO });
+    expect((await reg({ correo: largo(254) })).status).toBe(200);
+
+    const normal = await reg({ correo: '  USER52@X.com ', clave: 'claveNormal52' });
+    expect(normal.status).toBe(200);
+    for (const [i, variante] of ['user52@x.com', 'USER52@X.COM', ' User52@x.com '].entries()) {
+      const e = await entrar(
+        pedido('POST', '/api/entrar', { correo: variante, clave: 'claveNormal52' }, undefined, ip(`7.8.7.${i + 1}`)),
+      );
+      expect(e.status).toBe(200);
+    }
+    // Una clave de 200 caracteres también entra.
+    const larga = await entrar(
+      pedido('POST', '/api/entrar', { correo: 'l3@x.com', clave: 'a'.repeat(200) }, undefined, ip('7.8.8.1')),
+    );
+    expect(larga.status).toBe(200);
+  }, 120000);
 });
