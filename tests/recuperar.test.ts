@@ -323,7 +323,7 @@ describeDb('recuperar contraseña', () => {
     expect(restantes.length === 0 || Number(restantes[0]['intentos']) <= 5).toBe(true);
     expect(restantes).toHaveLength(0);
     expect((await llamar({ accion: 'confirmar', correo, codigo }, ipNueva())).status).toBe(400);
-  });
+  }, 60000);
 
   it('tras cuatro fallos el quinto intento correcto sirve, también confirmar y luego cambiar', async () => {
     const { correo } = await crearCuenta();

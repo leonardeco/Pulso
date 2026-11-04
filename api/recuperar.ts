@@ -106,7 +106,8 @@ export const POST = manejar(async (req: Request) => {
 });
 
 async function pedir(req: Request, correo: string): Promise<Response> {
-  if (await fallo(`pedir:${ipDe(req)}`, 10, 60)) {
+  // fallo() es true al llegar a max: con 11 pasan los 10 primeros y el 11.º ya no.
+  if (await fallo(`pedir:${ipDe(req)}`, 11, 60)) {
     return error('Demasiados intentos. Inténtalo más tarde.', 429);
   }
   if (!correoConfigurado()) return error('El envío de correo no está disponible por ahora.', 503);
