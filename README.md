@@ -18,6 +18,48 @@
   Claro y oscuro. Pensada para el teléfono y también para el computador.
 </p>
 
+## Así se ve
+
+<p align="center">
+  <img src="docs/capturas/inicio.png" alt="Inicio: el día, los conteos y la cita de hoy" width="220">
+  <img src="docs/capturas/agenda.png" alt="Agenda de la semana y horario de atención" width="220">
+  <img src="docs/capturas/rutina.png" alt="Rutina con la foto del ejercicio" width="220">
+  <img src="docs/capturas/clientes.png" alt="Lista de clientes" width="220">
+</p>
+
+<p align="center">
+  Inicio · Agenda · Rutina · Clientes
+</p>
+
+## Cómo se mueve
+
+```mermaid
+flowchart TD
+  cuenta["Cuenta"]
+  cuenta --> entrenador["Entrenador"]
+  cuenta --> persona["Persona"]
+
+  entrenador --> inicio["Inicio"]
+  entrenador --> agenda["Agenda"]
+  entrenador --> rutina["Rutina"]
+  entrenador --> clientes["Clientes"]
+  entrenador --> estudio["Estudio"]
+
+  agenda --> aviso["Aviso 10 min antes"]
+  rutina --> pdf["PDF"]
+  clientes --> ficha["Ficha"]
+
+  ficha --> comidas["Comidas"]
+  ficha --> pagos["Pagos"]
+  ficha --> acceso["Acceso"]
+  comidas --> pdf
+
+  acceso --> plan["Mi plan"]
+  persona --> plan
+```
+
+El entrenador arma el día. La persona solo entra a ver su plan. El aviso sale con la app abierta, diez minutos antes de un personalizado.
+
 ## Tres entradas
 
 | Quién | Qué hace ahí |
@@ -67,6 +109,15 @@ Si la cita de hoy es de un **personalizado**, la app avisa desde 10 minutos ante
 
 No avisa un semipersonalizado ni un virtual, y no repite el mismo aviso. La app tiene que estar abierta.
 
+## Con qué está hecha
+
+| | |
+| --- | --- |
+| App | Angular 21 |
+| Lenguaje | TypeScript |
+| Estilos | SCSS |
+| Datos | El navegador de ese celular o de ese computador |
+
 ## Correr el proyecto
 
 ```bash
@@ -80,7 +131,7 @@ Abre `http://localhost:4200`. En el celular, en la misma red, usa la dirección 
 
 En el navegador de ese celular o de ese computador. Lo que se crea en uno no aparece en el otro.
 
-La app abre vacía: el entrenador crea los servicios, el horario y las personas. La base compartida, para cuando varios teléfonos vean el mismo estudio, está en [propuesta-de-trabajo.docx](propuesta-de-trabajo.docx).
+La app abre vacía: el entrenador crea los servicios, el horario y las personas.
 
 ## Cómo está armado
 
