@@ -33,6 +33,7 @@ export class Recuperar {
     this.enviando.set(true);
     const mensaje = await this.sesion.pedirCodigo(this.correo);
     this.enviando.set(false);
+    if (this.paso() !== 'correo') return;
     if (mensaje) {
       this.error.set(mensaje);
       return;
@@ -45,6 +46,7 @@ export class Recuperar {
     this.enviando.set(true);
     const mensaje = await this.sesion.confirmarCodigo(this.correo, this.codigo);
     this.enviando.set(false);
+    if (this.paso() !== 'codigo') return;
     if (mensaje) {
       this.error.set(mensaje);
       return;
@@ -55,6 +57,8 @@ export class Recuperar {
   otroCodigo(): void {
     this.error.set('');
     this.codigo = '';
+    this.clave = '';
+    this.confirma = '';
     this.paso.set('correo');
   }
 

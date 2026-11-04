@@ -69,8 +69,8 @@
         Guardar contraseña
       }
     </button>
-    @if (paso() === 'codigo') {
-      <button class="texto" type="button" (click)="otroCodigo()">Pedir otro código</button>
+    @if (paso() !== 'correo') {
+      <button class="texto" type="button" [disabled]="enviando()" (click)="otroCodigo()">Pedir otro código</button>
     }
     <a class="texto" routerLink="/entrar">Volver a entrar</a>
   </form>
