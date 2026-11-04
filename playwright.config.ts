@@ -17,7 +17,7 @@ export default defineConfig({
     command: 'npm run build && npx tsx --env-file=.env scripts/servidor-local.ts',
     url: 'http://127.0.0.1:4300/api/sesion',
     reuseExistingServer: false,
-    env: { PULSO_E2E: '1' },
+    env: { PULSO_E2E: '1', PULSO_CORREO_ARCHIVO: 'test-results/correos.jsonl' },
     timeout: 300000,
   },
 });
