@@ -176,7 +176,7 @@
             <div class="comida">
               <label>
                 Momento
-                <select [value]="fila.momento" (change)="pulso.cambiarFila(tabla.id, fila.id, { momento: texto($event) })">
+                <select [ngModel]="fila.momento" (ngModelChange)="pulso.cambiarFila(tabla.id, fila.id, { momento: $event })">
                   @for (momento of momentos; track momento) {
                     <option [value]="momento">{{ momento }}</option>
                   }

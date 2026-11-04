@@ -1,14 +1,16 @@
-<header class="topbar">
-  <a class="marca" routerLink="/">
-    <img src="pulso-logo.jpg" alt="" width="36" height="36" />
-    Pulso
-  </a>
-  <p>Estudio del entrenador</p>
-</header>
+<div class="app">
+  <header class="topbar">
+    <a class="marca" routerLink="/">
+      <img src="pulso-logo.jpg" alt="" width="36" height="36" />
+      Pulso
+    </a>
+    <p>Estudio del entrenador</p>
+  </header>
 
-<main>
-  <router-outlet />
-</main>
+  <main>
+    <router-outlet />
+  </main>
+</div>
 
 <nav class="nav">
   <a routerLink="/" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
