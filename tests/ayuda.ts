@@ -7,6 +7,16 @@ const URL_PRUEBAS = process.env['PULSO_TEST_DATABASE_URL'] ?? '';
 if (!URL_PRUEBAS && process.env['CI']) {
   throw new Error('Falta PULSO_TEST_DATABASE_URL: en CI las pruebas de base de datos no se omiten.');
 }
+
+export function verificarBasePruebas(prueba: string, real: string): void {
+  if (prueba && real && prueba.trim() === real.trim()) {
+    throw new Error(
+      'PULSO_TEST_DATABASE_URL es igual a DATABASE_URL: las pruebas vacían tablas y no pueden correr contra la base real. Usa una base aparte.',
+    );
+  }
+}
+
+verificarBasePruebas(URL_PRUEBAS, process.env['DATABASE_URL'] ?? '');
 if (URL_PRUEBAS) process.env['DATABASE_URL'] = URL_PRUEBAS;
 
 export const describeDb: typeof describe = (URL_PRUEBAS ? describe : describe.skip) as typeof describe;

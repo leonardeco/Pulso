@@ -435,3 +435,130 @@ test('F17 dos pestañas con cuentas distintas no pisan el estudio de la otra', a
   await a.close();
   await b.close();
 });
+
+test('R1 dar acceso tras un guardado de otro dispositivo no pisa sus clientes', async ({ browser }) => {
+  const mail = correo('r1');
+  const a = await dispositivo(browser);
+  const b = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente De A');
+
+  const pb = await b.newPage();
+  await entrar(pb, mail);
+  await crearCliente(pb, 'Cliente De B');
+
+  // A sigue en la ficha que se abrió al crear el cliente, sin recargar: su versión local ya quedó vieja.
+  await expect(pa.getByRole('heading', { name: 'Cliente De A' })).toBeVisible();
+  await pa.locator('input[name=accesoCorreo]').fill(correo('cli'));
+  const crearAcceso = pa.getByRole('button', { name: 'Crear acceso' });
+  await escribirClave(pa.locator('input[name=accesoClave]'), CLAVE, pa.locator('input[name=accesoConfirma]'));
+  await escribirClave(pa.locator('input[name=accesoConfirma]'), CLAVE, crearAcceso);
+  await crearAcceso.click();
+  await expect(pa.getByText('Listo. Con ese correo entra')).toBeVisible();
+
+  const guardado = pa.waitForResponse((r) => esPut(r) && r.status() === 200);
+  await editarObjetivo(pa, 'Edición de A tras el acceso');
+  await guardado;
+
+  const servidor = await (await b.request.get('/api/estudio')).text();
+  expect(servidor).toContain('Cliente De B');
+  expect(servidor).toContain('Cliente De A');
+  expect(servidor).toContain('Edición de A tras el acceso');
+  await a.close();
+  await b.close();
+});
+
+test('R2 subida pendiente tras recargar: avisa y Entrar de nuevo sube los datos', async ({ browser }) => {
+  const mail = correo('r2');
+  const semilla = sembrarLocal(mail, CLAVE, 'clave-original-cliente', correo('leg'));
+  const a = await dispositivo(browser);
+  await a.addInitScript((s) => {
+    if (!localStorage.getItem('pulso.cuentas.v1')) {
+      localStorage.setItem('pulso.cuentas.v1', s.cuentas);
+      localStorage.setItem(`pulso.estado.${s.id}`, s.estado);
+    }
+  }, semilla);
+  const pa = await a.newPage();
+  await pa.route('**/api/estudio', (ruta) =>
+    ruta.request().method() === 'PUT'
+      ? ruta.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Falla simulada."}' })
+      : ruta.fallback(),
+  );
+  await entrar(pa, mail);
+  await expect(pa.getByText('No pude traer tus datos.')).toBeVisible();
+
+  await pa.unroute('**/api/estudio');
+  await pa.reload();
+  await expect(pa.getByText('Hay datos en este navegador sin subir.')).toBeVisible();
+  await expect(pa.locator('nav.nav')).toHaveCount(1);
+
+  await pa.getByRole('button', { name: 'Entrar de nuevo' }).click();
+  await expect(pa).toHaveURL(/\/entrar$/);
+  const subida = pa.waitForResponse((r) => esPut(r) && r.status() === 200);
+  await entrar(pa, mail);
+  await subida;
+  await expect(pa.getByText('Hay datos en este navegador sin subir.')).toBeHidden();
+  await pa.goto('/clientes');
+  await expect(pa.getByText('Cliente Legado')).toBeVisible();
+  await a.close();
+});
+
+test('R3 un 200 sin versión se reintenta y el 409 de firma igual lo confirma sin conflicto', async ({ browser }) => {
+  const mail = correo('r3');
+  const a = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Cortado');
+  await abrirFicha(pa, 'Cliente Cortado');
+
+  const estados: number[] = [];
+  pa.on('response', (r) => {
+    if (esPut(r)) estados.push(r.status());
+  });
+  let cortado = false;
+  await pa.route('**/api/estudio', async (ruta) => {
+    if (ruta.request().method() !== 'PUT' || cortado) return ruta.fallback();
+    cortado = true;
+    await ruta.fetch(); // el servidor sí guarda; al cliente le llega el cuerpo cortado
+    await ruta.fulfill({ status: 200, contentType: 'application/json', body: '' });
+  });
+  await editarObjetivo(pa, 'Guardado con respuesta cortada');
+  await expect(pa.getByText('Sin conexión. Reintentando')).toBeVisible();
+
+  await pa.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(pa.getByText('Sin conexión. Reintentando')).toBeHidden();
+  await expect.poll(() => estados.at(-1)).toBe(409);
+  await expect(pa.getByText('Este estudio cambió en otro dispositivo')).toBeHidden();
+  await expect(pa.getByLabel('Objetivo', { exact: true })).toHaveValue('Guardado con respuesta cortada');
+  expect(await (await a.request.get('/api/estudio')).text()).toContain('Guardado con respuesta cortada');
+  await a.close();
+});
+
+test('R4 Salir con un 4xx nuevo en el vaciado avisa y el segundo clic sale', async ({ browser }) => {
+  const mail = correo('r4');
+  const a = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Salida');
+  await abrirFicha(pa, 'Cliente Salida');
+
+  let soltar: () => void = () => undefined;
+  const puerta = new Promise<void>((resolver) => {
+    soltar = resolver;
+  });
+  await pa.route('**/api/estudio', async (ruta) => {
+    if (ruta.request().method() !== 'PUT') return ruta.fallback();
+    await puerta;
+    await ruta.fulfill({ status: 413, contentType: 'application/json', body: '{"error":"Demasiado grande."}' });
+  });
+  await editarObjetivo(pa, 'Edición que no cabe');
+  await pa.getByRole('button', { name: 'Salir' }).click();
+  soltar();
+  await expect(pa.getByText('No pude guardar: Demasiado grande.')).toBeVisible();
+  await expect(pa).not.toHaveURL(/\/entrar$/);
+
+  await pa.getByRole('button', { name: 'Salir' }).click();
+  await expect(pa).toHaveURL(/\/entrar$/);
+  await a.close();
+});

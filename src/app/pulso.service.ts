@@ -1,6 +1,6 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { pedir } from './api';
-import { cuentaLocal, estudioParaSubir, marcarSubido } from './datos-locales';
+import { cuentaLocal, datosLocalesSinSubir, estudioParaSubir, marcarSubido } from './datos-locales';
 import {
   Cliente,
   DiaRutina,
@@ -124,6 +124,7 @@ export class PulsoService {
   readonly sesionVencida = signal(false);
   readonly errorGuardado = signal('');
   readonly avisoSubida = signal<string[]>([]);
+  readonly subidaPendiente = signal(false);
 
   private version = 0;
   private ultimoJson = '';
@@ -167,10 +168,24 @@ export class PulsoService {
     return id ? `/api/estudio?entrenadorId=${encodeURIComponent(id)}` : '/api/estudio';
   }
 
-  async cargar(): Promise<void> {
+  async cargar(desdeEntrada = false): Promise<void> {
     const r = await pedir<Respuesta>('GET', this.rutaEstudio());
     if (r.ok && formaValida(r.datos)) {
       this.aplicar(r.datos);
+      const actual = this.sesion.actual();
+      if (
+        !desdeEntrada &&
+        this.sesion.esEntrenador() &&
+        estaVacio(this.estado()) &&
+        actual &&
+        datosLocalesSinSubir(actual.correo)
+      ) {
+        this.listo = false;
+        this.cargaFallida.set(false);
+        this.subidaPendiente.set(true);
+        return;
+      }
+      this.subidaPendiente.set(false);
       this.listo = true;
       this.cargaFallida.set(false);
       return;
@@ -191,7 +206,8 @@ export class PulsoService {
 
   async trasEntrar(correo: string, clave: string): Promise<void> {
     this.datosSubida = { correo, clave };
-    await this.cargar();
+    this.subidaPendiente.set(false);
+    await this.cargar(true);
     if (!this.sesion.esEntrenador()) {
       this.datosSubida = null;
       return;
@@ -247,7 +263,9 @@ export class PulsoService {
 
   async salir(): Promise<boolean> {
     if (this.hayPendientes()) {
+      const errorVisto = this.errorGuardado() !== '';
       await this.guardarAhora();
+      if (!errorVisto && this.errorGuardado() !== '' && this.hayPendientes()) return false;
       if (this.sinConexion() && this.hayPendientes()) return false;
       if (this.conflicto() || !this.sesion.activa()) return false;
     }
@@ -262,6 +280,7 @@ export class PulsoService {
     this.datosSubida = null;
     this.errorGuardado.set('');
     this.avisoSubida.set([]);
+    this.subidaPendiente.set(false);
     this.listo = false;
     this.version = 0;
     this.ultimoJson = '';
@@ -295,6 +314,7 @@ export class PulsoService {
     this.temporizador = null;
     this.reintento = null;
     this.datosSubida = null;
+    this.subidaPendiente.set(false);
     this.sesionVencida.set(true);
     this.sesion.actual.set(null);
     this.version = 0;
@@ -317,8 +337,11 @@ export class PulsoService {
         estado: sinAccesos(actual),
       });
       if (!this.listo) return;
-      if (r.ok) {
-        this.confirmar(r.datos?.version, enviado);
+      if (r.ok && typeof r.datos?.version === 'number') {
+        this.confirmar(r.datos.version, enviado);
+      } else if (r.ok) {
+        this.programarReintento();
+        return;
       } else if (r.status === 409 && formaValida(r.datos)) {
         if (firmaCanonica(normalizar(r.datos.estado)) === firmaCanonica(actual)) {
           this.confirmar(r.datos.version, enviado);
@@ -332,12 +355,7 @@ export class PulsoService {
         this.vencer();
         return;
       } else if (reintentable(r.status)) {
-        this.sinConexion.set(true);
-        this.anular(this.reintento);
-        this.reintento = setTimeout(() => {
-          this.reintento = null;
-          void this.guardarAhora();
-        }, REINTENTO_MS);
+        this.programarReintento();
         return;
       } else {
         this.sinConexion.set(false);
@@ -347,8 +365,17 @@ export class PulsoService {
     } while (this.repetir);
   }
 
-  private confirmar(version: unknown, enviado: string): void {
-    if (typeof version === 'number') this.version = version;
+  private programarReintento(): void {
+    this.sinConexion.set(true);
+    this.anular(this.reintento);
+    this.reintento = setTimeout(() => {
+      this.reintento = null;
+      void this.guardarAhora();
+    }, REINTENTO_MS);
+  }
+
+  private confirmar(version: number, enviado: string): void {
+    this.version = version;
     this.ultimoJson = enviado;
     this.sinConexion.set(false);
     this.errorGuardado.set('');
@@ -438,7 +465,7 @@ export class PulsoService {
       clave,
     });
     if (!r.ok) return r.error;
-    this.adoptarVersion(r.datos?.version);
+    if (!(await this.adoptarVersion(r.datos?.version))) return null;
     this.estado.update((estado) => ({
       ...estado,
       accesos: [...estado.accesos.filter((item) => item.clienteId !== clienteId), { clienteId, correo: mail }],
@@ -446,14 +473,20 @@ export class PulsoService {
     return null;
   }
 
-  private adoptarVersion(version: unknown): void {
-    if (typeof version === 'number') this.version = version;
+  // Si la versión no es la siguiente, otro dispositivo guardó en medio: se trae el estado real.
+  private async adoptarVersion(version: unknown): Promise<boolean> {
+    if (version === this.version + 1) {
+      this.version = version;
+      return true;
+    }
+    await this.refrescar();
+    return false;
   }
 
   async quitarAcceso(clienteId: string): Promise<string | null> {
     const r = await pedir<{ version?: number }>('DELETE', '/api/accesos', { clienteId });
     if (!r.ok) return r.error;
-    this.adoptarVersion(r.datos?.version);
+    if (!(await this.adoptarVersion(r.datos?.version))) return null;
     this.estado.update((estado) => ({
       ...estado,
       accesos: estado.accesos.filter((acceso) => acceso.clienteId !== clienteId),

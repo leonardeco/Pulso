@@ -39,6 +39,9 @@
     @if (sesion.activa() && pulso.cargaFallida()) {
       <p class="vacio">No pude traer tus datos.</p>
       <button type="button" class="primario" (click)="reintentar()">Reintentar</button>
+    } @else if (sesion.activa() && pulso.subidaPendiente()) {
+      <p class="vacio">Hay datos en este navegador sin subir. Entra de nuevo para subirlos.</p>
+      <button type="button" class="primario" (click)="salir()">Entrar de nuevo</button>
     } @else {
       <router-outlet />
     }

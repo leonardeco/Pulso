@@ -49,6 +49,12 @@ export async function cuentaLocal(correo: string, clave: string): Promise<Cuenta
   return (await hashClave(clave, cuenta.sal)) === cuenta.hash ? cuenta : null;
 }
 
+export function datosLocalesSinSubir(correo: string): boolean {
+  const mail = correo.trim().toLowerCase();
+  const cuenta = leerCuentas().find((c) => c?.correo === mail);
+  return !!cuenta && estudioParaSubir(cuenta) !== null;
+}
+
 function marcaSubido(id: string): string {
   return `pulso.subido.${id}`;
 }
