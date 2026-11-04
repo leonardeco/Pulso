@@ -101,7 +101,29 @@ El entrenador crea la suya con nombre, correo y contraseña. Desde ahí elige cl
 
 La persona no se registra sola. El entrenador le crea el acceso en la ficha y ella entra a ver su plan.
 
-La pantalla de recuperar pide un código de 4 números. Esta versión todavía no envía el correo: recuperar la contraseña aún no manda nada.
+La pantalla de recuperar pide el correo. Le llega un código de 6 números, válido 10 minutos y 5 intentos. Con la clave nueva se cierran las otras sesiones. Solo funciona si la cuenta ya existe en el servidor.
+
+## Correo de recuperación
+
+El código sale por Gmail. Hacen falta dos variables:
+
+| Variable | Qué es |
+| --- | --- |
+| `CORREO_USUARIO` | La cuenta de Gmail que envía. |
+| `CORREO_CLAVE` | La contraseña de aplicación de esa cuenta. |
+
+La contraseña de aplicación se crea en la cuenta de Google. Pide la verificación en dos pasos activa. No es la contraseña normal del correo.
+
+Se guardan en Vercel, no en el repo. Con la CLI, que pregunta el valor de cada una:
+
+```bash
+npx vercel env add CORREO_USUARIO production
+npx vercel env add CORREO_USUARIO preview
+npx vercel env add CORREO_CLAVE production
+npx vercel env add CORREO_CLAVE preview
+```
+
+Sin ellas, la pantalla avisa que el envío no está disponible.
 
 ## Aviso de la cita
 
