@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { neon } from '@neondatabase/serverless';
 import { beforeAll, describe } from 'vitest';
@@ -24,11 +24,15 @@ export const describeDb: typeof describe = (URL_PRUEBAS ? describe : describe.sk
 export function prepararDb(): void {
   beforeAll(async () => {
     const db = neon(URL_PRUEBAS);
-    const migracion = readFileSync(join(process.cwd(), 'db', 'migraciones', '001_cuentas_estudio.sql'), 'utf8');
-    for (const sentencia of migracion.split(';').map((s) => s.trim()).filter(Boolean)) {
-      await db.query(sentencia);
+    const carpeta = join(process.cwd(), 'db', 'migraciones');
+    const archivos = readdirSync(carpeta).filter((a) => a.endsWith('.sql')).sort();
+    for (const archivo of archivos) {
+      const migracion = readFileSync(join(carpeta, archivo), 'utf8');
+      for (const sentencia of migracion.split(';').map((s) => s.trim()).filter(Boolean)) {
+        await db.query(sentencia);
+      }
     }
-    await db`TRUNCATE cuenta, acceso_cliente, sesion, estudio, intento CASCADE`;
+    await db`TRUNCATE cuenta, acceso_cliente, sesion, estudio, intento, recuperacion CASCADE`;
   }, 60000);
 }
 
