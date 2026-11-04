@@ -1,38 +1,71 @@
 <p align="center">
-  <img src="public/pulso-logo.jpg" alt="Pulso" width="96">
-</p>
-
-<h1 align="center">Pulso</h1>
-
-<p align="center">
-  Estudio para el entrenador personal.<br>
-  Agenda, clientes, rutinas, alimentación y el cobro de cada mes.
+  <img src="public/pulso-marca.png" alt="Pulso Entrenadores" width="520">
 </p>
 
 <p align="center">
-  <img src="docs/capturas/inicio.png" alt="Inicio de Pulso" width="460">
+  <a href="https://pulso-seven-tau.vercel.app"><strong>Abrir la app</strong></a>
 </p>
 
-## Módulos
+<h1 align="center">El estudio, en el celular</h1>
 
-| Módulo | Qué hace |
+<p align="center">
+  Pulso es la app del entrenador personal.<br>
+  Agenda, clientes, rutina, alimentación y el cobro de cada mes.<br>
+  La persona entra y solo consulta lo suyo.
+</p>
+
+<p align="center">
+  Claro y oscuro. Pensada para el teléfono y también para el computador.
+</p>
+
+## Tres entradas
+
+| Quién | Qué hace ahí |
 | --- | --- |
-| Inicio | El día, lo que falta por cobrar y los servicios |
-| Agenda | La semana, la cita hecha o cancelada, y el horario de atención |
-| Reservar | Servicio, día y hora libre. Si el teléfono ya existe, usa ese cliente |
-| Clientes | Búsqueda, cliente nuevo y ficha |
-| Rutina | Días, ejercicios, series, repeticiones y plantillas |
-| Comidas | Tabla por momento del día. Es una guía del entrenador |
-| Pagos | Mensualidad y valoración del mes, más un cobro suelto si hace falta |
+| **Entrenador** | Ve el día, arma la agenda, reserva, crea la rutina y lleva a su gente. |
+| **Persona** | Entra con el acceso que le dio el entrenador. Ve citas, entreno y alimentación. No edita. |
+| **Estudio** | Quien administra la app ve, en ese navegador, cuántos entrenadores hay, las rutinas de cada uno y el precio. |
 
-## Cobro
+El enlace del estudio está en Inicio. La barra de abajo se queda en cinco: Inicio, Agenda, Rutina, Reservar y Clientes.
 
-Cada cliente paga dos cosas todos los meses, por separado:
+## Qué incluye
+
+| Módulo | Qué resuelve |
+| --- | --- |
+| **Inicio** | El día, citas, clientes por tipo de acompañamiento, rutinas, precios y lo que falta por cobrar. |
+| **Agenda** | La semana, la cita hecha o cancelada, y el horario de atención. |
+| **Reservar** | Servicio, día y hora libre. Si el teléfono ya existe, usa ese cliente. |
+| **Rutina** | Días, ejercicios, precio y una foto si el nombre está en el catálogo. La foto se puede quitar. |
+| **Clientes** | Alta, búsqueda y ficha. Cada persona es personalizada, semipersonalizada o virtual. |
+| **Comidas** | Tabla por momento del día. Es una guía del entrenador. |
+| **Pagos** | Mensualidad y valoración del mes, más un cobro suelto si hace falta. |
+| **PDF** | La rutina y la alimentación se imprimen desde el navegador y de ahí se guardan. |
+| **Aviso** | Diez minutos antes de un personalizado, con la app abierta. |
+
+Borrar un cliente se lleva su rutina, sus comidas, sus citas, sus pagos y su acceso.
+
+## El cobro
+
+Cada cliente puede pagar dos cosas todos los meses, por separado:
 
 - la **mensualidad**
 - la **valoración** de ese mes
 
 En la ficha, pestaña Pagos, se escriben los dos valores y se generan los cobros. Si el mes ya está, no se duplica.
+
+## La cuenta
+
+El entrenador crea la suya con nombre, correo y contraseña. Desde ahí elige claro u oscuro.
+
+La persona no se registra sola. El entrenador le crea el acceso en la ficha y ella entra a ver su plan.
+
+La pantalla de recuperar pide un código de 4 números. Esta versión todavía no envía el correo.
+
+## Aviso de la cita
+
+Si la cita de hoy es de un **personalizado**, la app avisa desde 10 minutos antes y también cuando ya es la hora. Sale una franja dentro de la app. Si se activan los avisos del celular, también llega la notificación.
+
+No avisa un semipersonalizado ni un virtual, y no repite el mismo aviso. La app tiene que estar abierta.
 
 ## Correr el proyecto
 
@@ -43,21 +76,28 @@ npm start
 
 Abre `http://localhost:4200`. En el celular, en la misma red, usa la dirección que muestra la consola.
 
+## Dónde quedan los datos
+
+En el navegador de ese celular o de ese computador. Lo que se crea en uno no aparece en el otro.
+
+La app abre vacía: el entrenador crea los servicios, el horario y las personas. La base compartida, para cuando varios teléfonos vean el mismo estudio, está en [propuesta-de-trabajo.docx](propuesta-de-trabajo.docx).
+
 ## Cómo está armado
 
 ```text
 src/app
-├── inicio/      día y servicios
-├── agenda/      semana y horario
-├── reserva/     cita nueva
-├── clientes/    lista
-├── ficha/       datos, rutina, comidas y pagos
-├── modelos.ts   los datos
+├── inicio/       día, resumen y servicios
+├── agenda/       semana, citas y horario
+├── reserva/      cita nueva
+├── rutinas/      rutina y precio
+├── clientes/     lista
+├── ficha/        datos, rutina, comidas, pagos y acceso
+├── mi-plan/      lo que ve la persona
+├── estudio/      entrenadores, rutinas y precios
+├── acceso/       entrar y crear cuenta
+├── recuperar/    código para la contraseña
+├── modelos.ts
 └── pulso.service.ts
 ```
 
-La pantalla cabe en 720 px y la barra de abajo acompaña ese ancho, también en el computador.
-
-## Datos de esta versión
-
-Quedan en el navegador de cada equipo. Sirve para usar la app en un computador. La base compartida, para cuando entren varios entrenadores, está en [propuesta-de-trabajo.docx](propuesta-de-trabajo.docx).
+La columna cabe en el teléfono. En el computador se queda centrada.
