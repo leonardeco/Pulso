@@ -66,7 +66,7 @@ El entrenador arma el día. La persona solo entra a ver su plan. El aviso sale c
 | --- | --- |
 | **Entrenador** | Ve el día, arma la agenda, reserva, crea la rutina y lleva a su gente. |
 | **Persona** | Entra con el acceso que le dio el entrenador. Ve citas, entreno y alimentación. No edita. |
-| **Estudio** | Quien administra la app ve, en ese navegador, cuántos entrenadores hay, las rutinas de cada uno y el precio. |
+| **Estudio** | Quien administra la app ve cuántos entrenadores hay, las rutinas de cada uno y el precio. |
 
 El enlace del estudio está en Inicio. La barra de abajo se queda en cinco: Inicio, Agenda, Rutina, Reservar y Clientes.
 
@@ -101,7 +101,7 @@ El entrenador crea la suya con nombre, correo y contraseña. Desde ahí elige cl
 
 La persona no se registra sola. El entrenador le crea el acceso en la ficha y ella entra a ver su plan.
 
-La pantalla de recuperar pide un código de 4 números. Esta versión todavía no envía el correo.
+La pantalla de recuperar pide un código de 4 números. Esta versión todavía no envía el correo: recuperar la contraseña aún no manda nada.
 
 ## Aviso de la cita
 
@@ -116,26 +116,39 @@ No avisa un semipersonalizado ni un virtual, y no repite el mismo aviso. La app 
 | App | Angular 21 |
 | Lenguaje | TypeScript |
 | Estilos | SCSS |
-| Datos | El navegador de ese celular o de ese computador |
+| Datos | Neon (Postgres) y funciones de Vercel |
 
 ## Correr el proyecto
 
 ```bash
 npm install
+cp .env.example .env
+npm run dev:api
 npm start
+```
+
+`npm run dev:api` va en otra terminal. Antes, aplica `db/migraciones/001_cuentas_estudio.sql` en la base de Neon.
+
+Pruebas:
+
+```bash
+npm test
+npm run e2e
 ```
 
 Abre `http://localhost:4200`. En el celular, en la misma red, usa la dirección que muestra la consola.
 
 ## Dónde quedan los datos
 
-En el navegador de ese celular o de ese computador. Lo que se crea en uno no aparece en el otro.
+Los datos viven en Neon. Se ven igual en cualquier dispositivo. Sin internet la app avisa y no guarda hasta volver.
 
 La app abre vacía: el entrenador crea los servicios, el horario y las personas.
 
 ## Cómo está armado
 
 ```text
+api/             funciones de Vercel
+db/migraciones/  esquema de la base
 src/app
 ├── inicio/       día, resumen y servicios
 ├── agenda/       semana, citas y horario
