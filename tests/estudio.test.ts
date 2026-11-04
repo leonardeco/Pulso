@@ -47,6 +47,16 @@ const estado: Estado = {
 };
 
 describe('estudio', () => {
+  it('validarEstado rechaza elementos que no son objetos con id', () => {
+    const base = { ...estado, accesos: [] };
+    expect(validarEstado({ ...base, rutinas: [null] })).toBeNull();
+    expect(validarEstado({ ...base, pagos: [{ clienteId: 'c1' }] })).toBeNull();
+    expect(validarEstado({ ...base, citas: ['x'] })).toBeNull();
+    expect(validarEstado({ ...base, rutinas: [{ id: 'r', dias: 'no' }] })).toBeNull();
+    expect(validarEstado({ ...base, tablas: [{ id: 't', filas: {} }] })).toBeNull();
+    expect(validarEstado({ ...base, rutinas: [{ id: 'r' }], tablas: [{ id: 't' }] })).not.toBeNull();
+  });
+
   it('vistaCliente no devuelve pagos, notas, otros clientes ni precios', () => {
     const v = vistaCliente(estado, 'c1');
     expect(v.pagos).toEqual([]);

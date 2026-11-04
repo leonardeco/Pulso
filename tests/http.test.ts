@@ -19,6 +19,11 @@ describe('http', () => {
     expect(cookieSesion('t', req('GET', {}, 'http://localhost:4300/api/x'))).not.toContain('Secure');
   });
 
+  it('Secure solo se omite en http', () => {
+    expect(cookieSesion('t', req('GET', {}, 'http://192.168.1.5:4300/api/x'))).not.toContain('Secure');
+    expect(cookieSesion('t', req('GET', {}, 'https://x/api/x'))).toContain('Secure');
+  });
+
   it('leerJson valida tipo, tamaño y formato', async () => {
     await expect(leerJson(req('POST', { 'content-type': 'text/plain' }))).rejects.toMatchObject({
       status: 415,

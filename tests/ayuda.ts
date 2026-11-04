@@ -4,6 +4,9 @@ import { neon } from '@neondatabase/serverless';
 import { beforeAll, describe } from 'vitest';
 
 const URL_PRUEBAS = process.env['PULSO_TEST_DATABASE_URL'] ?? '';
+if (!URL_PRUEBAS && process.env['CI']) {
+  throw new Error('Falta PULSO_TEST_DATABASE_URL: en CI las pruebas de base de datos no se omiten.');
+}
 if (URL_PRUEBAS) process.env['DATABASE_URL'] = URL_PRUEBAS;
 
 export const describeDb: typeof describe = (URL_PRUEBAS ? describe : describe.skip) as typeof describe;

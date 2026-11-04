@@ -7,8 +7,16 @@ const PUERTO = 4300;
 const RAIZ = resolve(import.meta.dirname, '..');
 const ESTATICOS = join(RAIZ, 'dist', 'pulso', 'browser');
 
-if (process.env['PULSO_TEST_DATABASE_URL']) {
-  process.env['DATABASE_URL'] = process.env['PULSO_TEST_DATABASE_URL'];
+if (process.env['PULSO_E2E'] === '1') {
+  const prueba = process.env['PULSO_TEST_DATABASE_URL'];
+  if (!prueba) {
+    console.error('Falta PULSO_TEST_DATABASE_URL: las pruebas E2E no usan DATABASE_URL para no tocar datos reales.');
+    process.exit(1);
+  }
+  process.env['DATABASE_URL'] = prueba;
+} else if (!process.env['DATABASE_URL']) {
+  console.error('Falta DATABASE_URL. Ponla en .env (ver .env.example).');
+  process.exit(1);
 }
 
 const TIPOS: Record<string, string> = {

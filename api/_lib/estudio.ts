@@ -74,8 +74,16 @@ export function validarEstado(x: unknown): Estado | null {
   const o = x as Record<string, unknown>;
   for (const k of LISTAS) if (!Array.isArray(o[k])) return null;
   if (!o['horario'] || typeof o['horario'] !== 'object' || Array.isArray(o['horario'])) return null;
-  for (const c of o['clientes'] as unknown[]) {
-    if (!c || typeof c !== 'object' || typeof (c as { id?: unknown }).id !== 'string') return null;
+  for (const k of LISTAS) {
+    for (const el of o[k] as unknown[]) {
+      if (!el || typeof el !== 'object' || Array.isArray(el)) return null;
+      if (typeof (el as { id?: unknown }).id !== 'string') return null;
+      const sub = k === 'rutinas' ? 'dias' : k === 'tablas' ? 'filas' : null;
+      if (sub) {
+        const v = (el as Record<string, unknown>)[sub];
+        if (v !== undefined && !Array.isArray(v)) return null;
+      }
+    }
   }
   return { ...(o as unknown as Estado), accesos: [] };
 }

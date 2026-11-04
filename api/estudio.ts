@@ -11,6 +11,9 @@ import { ErrorHttp, aceptaOrigen, error, json, leerJson, manejar } from './_lib/
 import { exigir } from './_lib/sesion';
 
 const HEX64 = /^[0-9a-f]{64}$/;
+const SAL = /^[A-Za-z0-9-]+$/;
+const MAX_LEGADO = 500;
+const SESION_VENCIDA = 'Tu sesión venció. Entra de nuevo.';
 
 async function accesosDe(entrenadorId: string) {
   const filas = await sql()`
@@ -35,7 +38,7 @@ interface Legado {
 
 function validarLegado(x: unknown, estado: Estado): Legado[] {
   if (x === undefined || x === null) return [];
-  if (!Array.isArray(x)) throw new ErrorHttp(400, 'Datos no válidos.');
+  if (!Array.isArray(x) || x.length > MAX_LEGADO) throw new ErrorHttp(400, 'Datos no válidos.');
   const ids = new Set(estado.clientes.map((c) => c.id));
   return x.map((i) => {
     const o = (i ?? {}) as Record<string, unknown>;
@@ -47,7 +50,7 @@ function validarLegado(x: unknown, estado: Estado): Legado[] {
       typeof clienteId !== 'string' ||
       !ids.has(clienteId) ||
       typeof sal !== 'string' ||
-      !sal ||
+      !SAL.test(sal) ||
       typeof hash !== 'string' ||
       !HEX64.test(hash) ||
       !correo.includes('@') ||
@@ -61,6 +64,8 @@ function validarLegado(x: unknown, estado: Estado): Legado[] {
 
 export const GET = manejar(async (req: Request) => {
   const s = await exigir(req);
+  const pedido = new URL(req.url).searchParams.get('entrenadorId');
+  if (pedido !== null && pedido !== s.cuentaId) throw new ErrorHttp(401, SESION_VENCIDA);
   const { estado, version } = await leer(s.cuentaId);
   if (s.rol === 'cliente') {
     return json({ estado: vistaCliente(estado, s.clienteId as string), version });
@@ -71,7 +76,14 @@ export const GET = manejar(async (req: Request) => {
 export const PUT = manejar(async (req: Request) => {
   if (!aceptaOrigen(req)) return error('Origen no permitido.', 403);
   const s = await exigir(req, 'entrenador');
-  const cuerpo = (await leerJson(req)) as { version?: unknown; estado?: unknown; accesosLegado?: unknown } | null;
+  const cuerpo = (await leerJson(req)) as {
+    entrenadorId?: unknown;
+    version?: unknown;
+    estado?: unknown;
+    accesosLegado?: unknown;
+  } | null;
+  if (typeof cuerpo?.entrenadorId !== 'string') throw new ErrorHttp(400, 'Datos no válidos.');
+  if (cuerpo.entrenadorId !== s.cuentaId) throw new ErrorHttp(401, SESION_VENCIDA);
   const version = cuerpo?.version;
   const estado = validarEstado(cuerpo?.estado);
   if (!estado || typeof version !== 'number' || !Number.isInteger(version) || version < 0) {
@@ -83,6 +95,9 @@ export const PUT = manejar(async (req: Request) => {
 
   const datos = JSON.stringify(estado);
   const ids = JSON.stringify(estado.clientes.map((c) => c.id));
+  const leg = JSON.stringify(
+    legado.map((l) => ({ cliente_id: l.clienteId, correo: l.correo, sal: l.sal, hash: l.hash })),
+  );
   const filas = await sql()`
     WITH act AS (
       UPDATE estudio SET datos = ${datos}::jsonb, version = version + 1, actualizado_en = now()
@@ -100,8 +115,17 @@ export const PUT = manejar(async (req: Request) => {
         AND EXISTS (SELECT 1 FROM act)
         AND cliente_id <> ALL(ARRAY(SELECT jsonb_array_elements_text(${ids}::jsonb)))
       RETURNING 1
+    ), nuevos AS (
+      INSERT INTO acceso_cliente (cliente_id, entrenador_id, correo, clave_hash)
+      SELECT r.cliente_id, ${s.cuentaId}::uuid, r.correo, 'sha256$' || r.sal || '$' || r.hash
+      FROM jsonb_to_recordset(${leg}::jsonb) AS r(cliente_id text, correo text, sal text, hash text)
+      WHERE EXISTS (SELECT 1 FROM act)
+        AND NOT EXISTS (SELECT 1 FROM cuenta WHERE cuenta.correo = r.correo)
+      ON CONFLICT DO NOTHING
+      RETURNING correo
     )
-    SELECT version FROM act`;
+    SELECT act.version, (SELECT COALESCE(jsonb_agg(correo), '[]'::jsonb) FROM nuevos) AS insertados
+    FROM act`;
   if (!filas[0]) {
     const actual = await leer(s.cuentaId);
     return json(
@@ -110,12 +134,7 @@ export const PUT = manejar(async (req: Request) => {
     );
   }
 
-  for (const l of legado) {
-    await sql()`
-      INSERT INTO acceso_cliente (cliente_id, entrenador_id, correo, clave_hash)
-      SELECT ${l.clienteId}::text, ${s.cuentaId}::uuid, ${l.correo}::text, ${`sha256$${l.sal}$${l.hash}`}::text
-      WHERE NOT EXISTS (SELECT 1 FROM cuenta WHERE correo = ${l.correo}::text)
-      ON CONFLICT DO NOTHING`;
-  }
-  return json({ version: Number(filas[0]['version']), accesos: await accesosDe(s.cuentaId) });
+  const puestos = new Set(Array.isArray(filas[0]['insertados']) ? (filas[0]['insertados'] as string[]) : []);
+  const accesosOmitidos = [...new Set(legado.map((l) => l.correo).filter((c) => !puestos.has(c)))];
+  return json({ version: Number(filas[0]['version']), accesos: await accesosDe(s.cuentaId), accesosOmitidos });
 });

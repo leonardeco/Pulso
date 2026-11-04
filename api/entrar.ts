@@ -55,7 +55,7 @@ export const POST = manejar(async (req: Request) => {
   const clienteId = String(acceso['cliente_id']);
   const entrenadorId = String(acceso['entrenador_id']);
   if (r.actualizar) {
-    await sql()`UPDATE acceso_cliente SET clave_hash = ${await crearHash(clave)} WHERE cliente_id = ${clienteId}`;
+    await sql()`UPDATE acceso_cliente SET clave_hash = ${await crearHash(clave)} WHERE cliente_id = ${clienteId} AND entrenador_id = ${entrenadorId}::uuid`;
   }
   const token = await abrir('cliente', entrenadorId, clienteId);
   const est = await sql()`SELECT datos FROM estudio WHERE entrenador_id = ${entrenadorId}::uuid`;

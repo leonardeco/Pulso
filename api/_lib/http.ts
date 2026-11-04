@@ -52,17 +52,20 @@ export function aceptaOrigen(req: Request): boolean {
   }
 }
 
-function esLocal(req: Request): boolean {
-  const url = req.url;
-  return url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1');
+function esHttp(req: Request): boolean {
+  try {
+    return new URL(req.url).protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 export function cookieSesion(token: string, req: Request): string {
-  return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${esLocal(req) ? '' : '; Secure'}`;
+  return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${esHttp(req) ? '' : '; Secure'}`;
 }
 
 export function borrarCookie(req: Request): string {
-  return `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${esLocal(req) ? '' : '; Secure'}`;
+  return `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${esHttp(req) ? '' : '; Secure'}`;
 }
 
 export function ipDe(req: Request): string {
@@ -77,7 +80,9 @@ export function manejar(fn: (req: Request) => Promise<Response>): (req: Request)
       return await fn(req);
     } catch (e) {
       if (e instanceof ErrorHttp) return error(e.texto, e.status);
-      console.error(e instanceof Error ? e.name : 'Error');
+      const code = (e as { code?: unknown } | null)?.code;
+      const nombre = e instanceof Error ? e.name : 'Error';
+      console.error(typeof code === 'string' || typeof code === 'number' ? `${nombre} ${code}` : nombre);
       return error('Algo falló. Inténtalo de nuevo.', 500);
     }
   };

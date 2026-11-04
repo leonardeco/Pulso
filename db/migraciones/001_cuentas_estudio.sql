@@ -8,10 +8,11 @@ create table if not exists cuenta (
 );
 
 create table if not exists acceso_cliente (
-  cliente_id text primary key,
+  cliente_id text not null,
   entrenador_id uuid not null references cuenta on delete cascade,
   correo text not null unique,
-  clave_hash text not null
+  clave_hash text not null,
+  primary key (entrenador_id, cliente_id)
 );
 create index if not exists acceso_cliente_entrenador_idx on acceso_cliente (entrenador_id);
 

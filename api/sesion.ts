@@ -1,15 +1,10 @@
 import { actual, cerrar } from './_lib/sesion';
 import { aceptaOrigen, borrarCookie, error, json, manejar } from './_lib/http';
-import { sql } from './_lib/db';
 
 export const GET = manejar(async (req: Request) => {
   const s = await actual(req);
   if (!s) return json({ sesion: null });
-  let entrenadorId = s.cuentaId;
-  if (s.rol === 'cliente') {
-    const f = await sql()`SELECT entrenador_id FROM acceso_cliente WHERE cliente_id = ${s.clienteId}`;
-    entrenadorId = String(f[0]?.['entrenador_id'] ?? s.cuentaId);
-  }
+  const entrenadorId = s.cuentaId;
   const sesion: Record<string, unknown> = {
     rol: s.rol,
     nombre: s.nombre,
