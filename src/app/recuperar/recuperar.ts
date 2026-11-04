@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { subirCampoClave } from '../clave-campo';
+import { PulsoService } from '../pulso.service';
 import { SesionService } from '../sesion.service';
 import { TemaService } from '../tema.service';
 
@@ -12,6 +13,7 @@ import { TemaService } from '../tema.service';
 })
 export class Recuperar {
   private readonly sesion = inject(SesionService);
+  private readonly pulso = inject(PulsoService);
   private readonly router = inject(Router);
   readonly tema = inject(TemaService);
   readonly paso = signal<'correo' | 'codigo' | 'clave'>('correo');
@@ -50,6 +52,12 @@ export class Recuperar {
     this.paso.set('clave');
   }
 
+  otroCodigo(): void {
+    this.error.set('');
+    this.codigo = '';
+    this.paso.set('correo');
+  }
+
   async guardar(): Promise<void> {
     this.error.set('');
     if (this.clave !== this.confirma) {
@@ -57,12 +65,13 @@ export class Recuperar {
       return;
     }
     this.enviando.set(true);
-    const mensaje = await this.sesion.cambiarClave(this.correo, this.clave);
+    const mensaje = await this.sesion.cambiarClave(this.correo, this.codigo, this.clave);
     this.enviando.set(false);
     if (mensaje) {
       this.error.set(mensaje);
       return;
     }
+    await this.pulso.trasEntrar(this.correo, this.clave);
     await this.router.navigateByUrl('/');
   }
 

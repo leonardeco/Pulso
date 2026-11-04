@@ -5,9 +5,9 @@
     <h1>Recuperar contraseña</h1>
     <p class="bajada">
       @if (paso() === 'correo') {
-        Escribe el correo del entrenador. Te llega un código de 4 números.
+        Escribe el correo del entrenador. Te llega un código de 6 números.
       } @else if (paso() === 'codigo') {
-        Escribe el código que llegó a {{ correo }}.
+        Si ese correo tiene cuenta, te llegó un código. Vence en 10 minutos.
       } @else {
         Elige la contraseña nueva de tu cuenta.
       }
@@ -23,7 +23,7 @@
     @if (paso() === 'codigo') {
       <label>
         Código
-        <input name="codigo" [(ngModel)]="codigo" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="4 números" />
+        <input name="codigo" [(ngModel)]="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 números" />
       </label>
     }
 
@@ -57,7 +57,7 @@
     }
 
     @if (error()) {
-      <p class="error">{{ error() }}</p>
+      <p class="error" role="alert">{{ error() }}</p>
     }
 
     <button class="primario" type="submit" [disabled]="enviando()">
@@ -69,6 +69,9 @@
         Guardar contraseña
       }
     </button>
+    @if (paso() === 'codigo') {
+      <button class="texto" type="button" (click)="otroCodigo()">Pedir otro código</button>
+    }
     <a class="texto" routerLink="/entrar">Volver a entrar</a>
   </form>
 

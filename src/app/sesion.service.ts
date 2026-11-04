@@ -102,15 +102,31 @@ export class SesionService {
   async pedirCodigo(correo: string): Promise<string | null> {
     const mail = correo.trim().toLowerCase();
     if (!correoValido(mail)) return 'Escribe un correo válido.';
-    return 'El código no salió al correo. Este estudio todavía no tiene envío de correo.';
+    const r = await pedir('POST', '/api/recuperar', { accion: 'pedir', correo: mail });
+    return r.ok ? null : r.error;
   }
 
-  async confirmarCodigo(_correo: string, _codigo: string): Promise<string | null> {
-    return 'Pide un código nuevo.';
+  async confirmarCodigo(correo: string, codigo: string): Promise<string | null> {
+    const mail = correo.trim().toLowerCase();
+    const solo = codigo.replace(/\D/g, '');
+    if (solo.length !== 6) return 'El código tiene 6 números.';
+    const r = await pedir('POST', '/api/recuperar', { accion: 'confirmar', correo: mail, codigo: solo });
+    return r.ok ? null : r.error;
   }
 
-  async cambiarClave(_correo: string, _clave: string): Promise<string | null> {
-    return 'Pide un código nuevo.';
+  async cambiarClave(correo: string, codigo: string, clave: string): Promise<string | null> {
+    const mail = correo.trim().toLowerCase();
+    const solo = codigo.replace(/\D/g, '');
+    if (solo.length !== 6) return 'El código tiene 6 números.';
+    if (clave.length < 8) return 'La contraseña necesita al menos 8 caracteres.';
+    const r = await pedir<{ sesion: SesionApi }>('POST', '/api/recuperar', {
+      accion: 'cambiar',
+      correo: mail,
+      codigo: solo,
+      clave,
+    });
+    if (!r.ok) return r.error;
+    return this.abrir(r.datos?.sesion);
   }
 
   private async registro(nombre: string, correo: string, clave: string): Promise<string | null> {
