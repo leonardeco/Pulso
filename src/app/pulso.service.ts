@@ -28,6 +28,42 @@ interface Respuesta {
   estado: Estado;
   version: number;
   accesos?: Estado['accesos'];
+  accesosOmitidos?: string[];
+}
+
+function formaValida(d: unknown): d is { estado: Estado; version: number } {
+  const x = d as { estado?: Partial<Estado>; version?: unknown } | null | undefined;
+  const e = x?.estado;
+  return (
+    typeof x?.version === 'number' &&
+    !!e &&
+    typeof e === 'object' &&
+    Array.isArray(e.servicios) &&
+    Array.isArray(e.clientes) &&
+    Array.isArray(e.citas) &&
+    !!e.horario &&
+    typeof e.horario === 'object'
+  );
+}
+
+function canonico(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonico);
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, x]) => [k, canonico(x)]),
+    );
+  }
+  return v;
+}
+
+function firmaCanonica(estado: Estado): string {
+  return JSON.stringify(canonico(sinAccesos(estado)));
+}
+
+function reintentable(status: number): boolean {
+  return status === 0 || status >= 500;
 }
 
 function vacio(): Estado {
@@ -86,6 +122,8 @@ export class PulsoService {
   readonly sinConexion = signal(false);
   readonly conflicto = signal(false);
   readonly sesionVencida = signal(false);
+  readonly errorGuardado = signal('');
+  readonly avisoSubida = signal<string[]>([]);
 
   private version = 0;
   private ultimoJson = '';
@@ -94,6 +132,7 @@ export class PulsoService {
   private listo = false;
   private enCurso: Promise<void> | null = null;
   private repetir = false;
+  private datosSubida: { correo: string; clave: string } | null = null;
 
   constructor() {
     effect(() => {
@@ -112,21 +151,31 @@ export class PulsoService {
     window.addEventListener('online', () => {
       if (this.sinConexion()) void this.guardarAhora();
     });
-    window.addEventListener('pagehide', () => this.guardarAlSalir());
+    window.addEventListener('pagehide', (evento) => {
+      if (!evento.persisted) this.guardarAlSalir();
+    });
+    window.addEventListener('pageshow', (evento) => {
+      if (evento.persisted) void this.refrescar();
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') void this.refrescar();
     });
   }
 
+  private rutaEstudio(): string {
+    const id = this.sesion.estudioId();
+    return id ? `/api/estudio?entrenadorId=${encodeURIComponent(id)}` : '/api/estudio';
+  }
+
   async cargar(): Promise<void> {
-    const r = await pedir<Respuesta>('GET', '/api/estudio');
-    if (r.ok) {
+    const r = await pedir<Respuesta>('GET', this.rutaEstudio());
+    if (r.ok && formaValida(r.datos)) {
       this.aplicar(r.datos);
       this.listo = true;
       this.cargaFallida.set(false);
       return;
     }
-    if (r.status === 401) {
+    if (!r.ok && r.status === 401) {
       this.vencer();
       return;
     }
@@ -134,24 +183,55 @@ export class PulsoService {
     this.cargaFallida.set(true);
   }
 
+  async reintentar(): Promise<void> {
+    const datos = this.datosSubida;
+    if (datos) await this.trasEntrar(datos.correo, datos.clave);
+    else await this.cargar();
+  }
+
   async trasEntrar(correo: string, clave: string): Promise<void> {
+    this.datosSubida = { correo, clave };
     await this.cargar();
-    if (!this.sesion.esEntrenador() || !this.listo || !estaVacio(this.estado())) return;
-    const cuenta = await cuentaLocal(correo, clave);
-    if (!cuenta) return;
-    const subida = estudioParaSubir(cuenta);
-    if (!subida) return;
-    const r = await pedir<Respuesta>('PUT', '/api/estudio', {
-      version: this.version,
-      estado: sinAccesos(subida.estado),
-      accesosLegado: subida.accesosLegado,
-    });
-    if (r.ok) {
-      marcarSubido(cuenta.id);
-      this.aplicar({ estado: { ...subida.estado, accesos: r.datos.accesos ?? [] }, version: r.datos.version });
-    } else if (r.status === 401) {
-      this.vencer();
+    if (!this.sesion.esEntrenador()) {
+      this.datosSubida = null;
+      return;
     }
+    if (!this.listo) return;
+    if (!estaVacio(this.estado())) {
+      this.datosSubida = null;
+      return;
+    }
+    try {
+      const cuenta = await cuentaLocal(correo, clave);
+      const subida = cuenta ? estudioParaSubir(cuenta) : null;
+      if (!cuenta || !subida) {
+        this.datosSubida = null;
+        return;
+      }
+      const r = await pedir<Respuesta>('PUT', '/api/estudio', {
+        entrenadorId: this.sesion.estudioId(),
+        version: this.version,
+        estado: sinAccesos(subida.estado),
+        accesosLegado: subida.accesosLegado,
+      });
+      if (r.ok && typeof r.datos?.version === 'number') {
+        marcarSubido(cuenta.id);
+        this.aplicar({ estado: { ...subida.estado, accesos: r.datos.accesos ?? [] }, version: r.datos.version });
+        this.datosSubida = null;
+        const omitidos = r.datos.accesosOmitidos ?? [];
+        if (omitidos.length > 0) this.avisoSubida.set(omitidos);
+        return;
+      }
+      if (!r.ok && r.status === 401) {
+        this.datosSubida = null;
+        this.vencer();
+        return;
+      }
+    } catch {
+      /* cualquier fallo de la subida se trata abajo como carga fallida */
+    }
+    this.listo = false;
+    this.cargaFallida.set(true);
   }
 
   async guardarAhora(): Promise<void> {
@@ -169,12 +249,19 @@ export class PulsoService {
     if (this.hayPendientes()) {
       await this.guardarAhora();
       if (this.sinConexion() && this.hayPendientes()) return false;
+      if (this.conflicto() || !this.sesion.activa()) return false;
+    }
+    if (!(await this.sesion.salir())) {
+      this.sinConexion.set(true);
+      return false;
     }
     this.anular(this.temporizador);
     this.anular(this.reintento);
     this.temporizador = null;
     this.reintento = null;
-    await this.sesion.salir();
+    this.datosSubida = null;
+    this.errorGuardado.set('');
+    this.avisoSubida.set([]);
     this.listo = false;
     this.version = 0;
     this.ultimoJson = '';
@@ -207,8 +294,12 @@ export class PulsoService {
     this.anular(this.reintento);
     this.temporizador = null;
     this.reintento = null;
+    this.datosSubida = null;
     this.sesionVencida.set(true);
     this.sesion.actual.set(null);
+    this.version = 0;
+    this.ultimoJson = '';
+    this.estado.set(vacio());
   }
 
   private async ciclo(): Promise<void> {
@@ -221,26 +312,26 @@ export class PulsoService {
       const enviado = firma(actual);
       if (enviado === this.ultimoJson) return;
       const r = await pedir<Respuesta>('PUT', '/api/estudio', {
+        entrenadorId: this.sesion.estudioId(),
         version: this.version,
         estado: sinAccesos(actual),
       });
       if (!this.listo) return;
       if (r.ok) {
-        this.version = r.datos.version;
-        this.ultimoJson = enviado;
-        this.sinConexion.set(false);
-        this.anular(this.reintento);
-        this.reintento = null;
-        if (firma(this.estado()) !== enviado) this.repetir = true;
-      } else if (r.status === 409 && r.datos) {
-        this.aplicar(r.datos);
-        this.conflicto.set(true);
-        this.sinConexion.set(false);
-        return;
+        this.confirmar(r.datos?.version, enviado);
+      } else if (r.status === 409 && formaValida(r.datos)) {
+        if (firmaCanonica(normalizar(r.datos.estado)) === firmaCanonica(actual)) {
+          this.confirmar(r.datos.version, enviado);
+        } else {
+          this.aplicar(r.datos);
+          this.conflicto.set(true);
+          this.sinConexion.set(false);
+          return;
+        }
       } else if (r.status === 401) {
         this.vencer();
         return;
-      } else {
+      } else if (reintentable(r.status)) {
         this.sinConexion.set(true);
         this.anular(this.reintento);
         this.reintento = setTimeout(() => {
@@ -248,13 +339,27 @@ export class PulsoService {
           void this.guardarAhora();
         }, REINTENTO_MS);
         return;
+      } else {
+        this.sinConexion.set(false);
+        this.errorGuardado.set(r.error);
+        return;
       }
     } while (this.repetir);
   }
 
+  private confirmar(version: unknown, enviado: string): void {
+    if (typeof version === 'number') this.version = version;
+    this.ultimoJson = enviado;
+    this.sinConexion.set(false);
+    this.errorGuardado.set('');
+    this.anular(this.reintento);
+    this.reintento = null;
+    if (firma(this.estado()) !== enviado) this.repetir = true;
+  }
+
   private guardarAlSalir(): void {
     if (!this.hayPendientes()) return;
-    const cuerpo = JSON.stringify({ version: this.version, estado: sinAccesos(this.estado()) });
+    const cuerpo = JSON.stringify({ entrenadorId: this.sesion.estudioId(), version: this.version, estado: sinAccesos(this.estado()) });
     if (new TextEncoder().encode(cuerpo).length >= MAX_KEEPALIVE) return;
     void fetch('/api/estudio', {
       method: 'PUT',
@@ -268,9 +373,11 @@ export class PulsoService {
   private async refrescar(): Promise<void> {
     if (!this.listo || !this.sesion.activa() || this.enCurso || this.temporizador !== null) return;
     if (this.hayPendientes()) return;
-    const r = await pedir<Respuesta>('GET', '/api/estudio');
+    const r = await pedir<Respuesta>('GET', this.rutaEstudio());
     if (r.ok) {
+      if (!formaValida(r.datos)) return;
       if (!this.listo || this.enCurso || this.hayPendientes()) return;
+      this.sinConexion.set(false);
       if (r.datos.version !== this.version) this.aplicar(r.datos);
     } else if (r.status === 401) {
       this.vencer();
@@ -318,17 +425,20 @@ export class PulsoService {
     const mail = correo.trim().toLowerCase();
     if (!mail.includes('@') || mail.startsWith('@') || mail.endsWith('@')) return 'Escribe un correo válido.';
     if (clave.length < 8) return 'La contraseña necesita al menos 8 caracteres.';
+    await this.guardarAhora();
+    if (this.hayPendientes()) return 'Aún no se guardan tus cambios. Inténtalo de nuevo.';
     const actual = this.estado();
     if (!actual.clientes.some((cliente) => cliente.id === clienteId)) return 'No encuentro ese cliente.';
     if (actual.accesos.some((acceso) => acceso.correo === mail && acceso.clienteId !== clienteId)) {
       return 'Ese correo ya lo usa otro cliente.';
     }
-    const r = await pedir<{ clienteId: string; correo: string }>('PUT', '/api/accesos', {
+    const r = await pedir<{ clienteId: string; correo: string; version?: number }>('PUT', '/api/accesos', {
       clienteId,
       correo: mail,
       clave,
     });
     if (!r.ok) return r.error;
+    this.adoptarVersion(r.datos?.version);
     this.estado.update((estado) => ({
       ...estado,
       accesos: [...estado.accesos.filter((item) => item.clienteId !== clienteId), { clienteId, correo: mail }],
@@ -336,9 +446,14 @@ export class PulsoService {
     return null;
   }
 
+  private adoptarVersion(version: unknown): void {
+    if (typeof version === 'number') this.version = version;
+  }
+
   async quitarAcceso(clienteId: string): Promise<string | null> {
-    const r = await pedir('DELETE', '/api/accesos', { clienteId });
+    const r = await pedir<{ version?: number }>('DELETE', '/api/accesos', { clienteId });
     if (!r.ok) return r.error;
+    this.adoptarVersion(r.datos?.version);
     this.estado.update((estado) => ({
       ...estado,
       accesos: estado.accesos.filter((acceso) => acceso.clienteId !== clienteId),

@@ -17,6 +17,7 @@ export async function pedir<T>(
     init.body = JSON.stringify(cuerpo);
   }
   if (opciones.keepalive) init.keepalive = true;
+  else init.signal = AbortSignal.timeout(15000);
 
   let res: Response;
   try {

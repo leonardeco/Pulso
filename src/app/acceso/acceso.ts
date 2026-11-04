@@ -31,12 +31,6 @@ export class Acceso {
   confirma = '';
 
   constructor() {
-    if (this.pulso.sesionVencida()) {
-      this.error.set('Tu sesión venció. Entra de nuevo.');
-      this.pulso.sesionVencida.set(false);
-    } else if (this.sesion.sinServidor()) {
-      this.error.set('No pude conectar. Revisa tu internet e inténtalo de nuevo.');
-    }
     this.route.data.subscribe((data) => {
       this.registro.set(!!data['registro']);
       this.error.set('');
@@ -44,6 +38,12 @@ export class Acceso {
       this.verClave.set(false);
       this.verConfirma.set(false);
     });
+    if (this.pulso.sesionVencida()) {
+      this.error.set('Tu sesión venció. Entra de nuevo.');
+      this.pulso.sesionVencida.set(false);
+    } else if (this.sesion.sinServidor()) {
+      this.error.set('No pude conectar. Revisa tu internet e inténtalo de nuevo.');
+    }
   }
 
   async enviar(): Promise<void> {

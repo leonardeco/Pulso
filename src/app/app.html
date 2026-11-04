@@ -18,6 +18,15 @@
     @if (pulso.sinConexion()) {
       <p class="estado-sync alerta" role="status" aria-live="polite">Sin conexión. Reintentando… tus últimos cambios aún no se guardan.</p>
     }
+    @if (pulso.errorGuardado(); as motivo) {
+      <p class="estado-sync alerta" role="status" aria-live="polite">No pude guardar: {{ motivo }}</p>
+    }
+    @if (pulso.avisoSubida().length > 0) {
+      <p class="estado-sync alerta" role="status" aria-live="polite">
+        Subimos tus datos, pero estos accesos no se crearon: {{ pulso.avisoSubida().join(', ') }}. Créalos de nuevo en la ficha.
+        <button type="button" class="texto" (click)="pulso.avisoSubida.set([])">Entendido</button>
+      </p>
+    }
     @if (pulso.conflicto()) {
       <p class="estado-sync alerta" role="status" aria-live="polite">
         Este estudio cambió en otro dispositivo. Cargamos lo más reciente; revisa tu último cambio.

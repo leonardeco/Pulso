@@ -57,6 +57,11 @@ async function entrar(page: Page, mail: string, clave = CLAVE): Promise<void> {
   ]);
 }
 
+async function sesionDe(ctx: BrowserContext): Promise<string> {
+  const r = (await (await ctx.request.get('/api/sesion')).json()) as { sesion: { entrenadorId: string } };
+  return r.sesion.entrenadorId;
+}
+
 const esPut = (r: { url(): string; request(): Request }) =>
   r.url().endsWith('/api/estudio') && r.request().method() === 'PUT';
 
@@ -201,11 +206,12 @@ test('TC-1.1 TC-1.3 cliente con acceso entra en otro dispositivo y solo ve su pl
     estado: { clientes: { id: string }[]; pagos: unknown[] };
     version: number;
   };
+  const entrenadorId = ((await (await a.request.get('/api/sesion')).json()) as { sesion: { entrenadorId: string } }).sesion.entrenadorId;
   const clienteId = actual.estado.clientes[0].id;
   const pago = { id: 'p1', clienteId, tipo: 'otro', periodo: '', concepto: 'PAGO-SECRETO', valor: 99, fecha: '2026-11-01', estado: 'pagado' };
   const put = await a.request.put('/api/estudio', {
     headers: origen,
-    data: { version: actual.version, estado: { ...actual.estado, accesos: [], pagos: [pago] } },
+    data: { entrenadorId, version: actual.version, estado: { ...actual.estado, accesos: [], pagos: [pago] } },
   });
   expect(put.status()).toBe(200);
 
@@ -318,17 +324,114 @@ test('TC-3.1 TC-3.2 carga fallida: aviso, ningún PUT y reintento', async ({ bro
   p.on('request', (r) => {
     if (r.url().endsWith('/api/estudio') && r.method() === 'PUT') puts.push(r.url());
   });
-  await p.route('**/api/estudio', (ruta) => ruta.abort());
+  await p.route('**/api/estudio?*', (ruta) => ruta.abort());
   await p.goto('/');
   await expect(p.getByText('No pude traer tus datos.')).toBeVisible();
   await expect(p.getByRole('button', { name: 'Reintentar' })).toBeVisible();
   await p.waitForTimeout(1500);
   expect(puts).toHaveLength(0);
 
-  await p.unroute('**/api/estudio');
+  await p.unroute('**/api/estudio?*');
   await p.getByRole('button', { name: 'Reintentar' }).click();
   await expect(p.getByText('No pude traer tus datos.')).toBeHidden();
   await p.goto('/clientes');
   await expect(p.getByText('Cliente Cuatro')).toBeVisible();
   await a.close();
+});
+
+test('F17 sesión vencida: editar lleva a entrar con el aviso', async ({ browser }) => {
+  const mail = correo('f17v');
+  const a = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Vence');
+  await abrirFicha(pa, 'Cliente Vence');
+
+  await a.clearCookies();
+  const rechazo = pa.waitForResponse((r) => esPut(r) && r.status() === 401);
+  await editarObjetivo(pa, 'Edición sin sesión');
+  await rechazo;
+  await expect(pa).toHaveURL(/\/entrar$/);
+  await expect(pa.getByText('Tu sesión venció. Entra de nuevo.')).toBeVisible();
+  await a.close();
+});
+
+test('F12 subida local con 500: avisa, reintenta y completa', async ({ browser }) => {
+  const mail = correo('f12');
+  const semilla = sembrarLocal(mail, CLAVE, 'clave-original-cliente', correo('leg'));
+  const a = await dispositivo(browser);
+  await a.addInitScript((s) => {
+    if (!localStorage.getItem('pulso.cuentas.v1')) {
+      localStorage.setItem('pulso.cuentas.v1', s.cuentas);
+      localStorage.setItem(`pulso.estado.${s.id}`, s.estado);
+    }
+  }, semilla);
+  const pa = await a.newPage();
+  await pa.route('**/api/estudio', (ruta) =>
+    ruta.request().method() === 'PUT'
+      ? ruta.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Falla simulada."}' })
+      : ruta.fallback(),
+  );
+  await entrar(pa, mail);
+  await expect(pa.getByText('No pude traer tus datos.')).toBeVisible();
+
+  await pa.unroute('**/api/estudio');
+  const subida = pa.waitForResponse((r) => esPut(r) && r.status() === 200);
+  await pa.getByRole('button', { name: 'Reintentar' }).click();
+  await subida;
+  await expect(pa.getByText('No pude traer tus datos.')).toBeHidden();
+  await pa.goto('/clientes');
+  await expect(pa.getByText('Cliente Legado')).toBeVisible();
+  await a.close();
+});
+
+test('F1 PUT rechazado con 413: avisa No pude guardar y deja salir', async ({ browser }) => {
+  const mail = correo('f1');
+  const a = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, mail);
+  await crearCliente(pa, 'Cliente Grande');
+  await abrirFicha(pa, 'Cliente Grande');
+
+  await pa.route('**/api/estudio', (ruta) =>
+    ruta.request().method() === 'PUT'
+      ? ruta.fulfill({ status: 413, contentType: 'application/json', body: '{"error":"Demasiado grande."}' })
+      : ruta.fallback(),
+  );
+  await editarObjetivo(pa, 'Cambio que no cabe');
+  await expect(pa.getByText('No pude guardar: Demasiado grande.')).toBeVisible();
+  await pa.getByRole('button', { name: 'Salir' }).click();
+  await expect(pa).toHaveURL(/\/entrar$/);
+  await a.close();
+});
+
+test('F17 dos pestañas con cuentas distintas no pisan el estudio de la otra', async ({ browser }) => {
+  const a = await dispositivo(browser);
+  const b = await dispositivo(browser);
+  const pa = await a.newPage();
+  await registrar(pa, correo('f17a'));
+  await crearCliente(pa, 'Cliente De A');
+  await abrirFicha(pa, 'Cliente De A');
+
+  const pb = await b.newPage();
+  await registrar(pb, correo('f17b'));
+  await crearCliente(pb, 'Cliente De B');
+
+  // La pestaña de A queda con la cookie de B, como si otra pestaña hubiera entrado con la cuenta B.
+  await a.addCookies(await b.cookies());
+  expect(await sesionDe(a)).toBe(await sesionDe(b));
+  const antes = (await (await b.request.get('/api/estudio')).json()) as { version: number };
+
+  const rechazo = pa.waitForResponse((r) => esPut(r) && r.status() === 401);
+  await editarObjetivo(pa, 'No debe llegar a B');
+  await rechazo;
+  await expect(pa.getByText('Tu sesión venció. Entra de nuevo.')).toBeVisible();
+
+  const despues = await (await b.request.get('/api/estudio')).text();
+  expect(JSON.parse(despues).version).toBe(antes.version);
+  expect(despues).toContain('Cliente De B');
+  expect(despues).not.toContain('Cliente De A');
+  expect(despues).not.toContain('No debe llegar a B');
+  await a.close();
+  await b.close();
 });

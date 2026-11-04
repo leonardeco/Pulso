@@ -34,8 +34,9 @@ export class Estudio {
 
   constructor() {
     void pedir<{ entrenadores: FilaEntrenador[] }>('GET', '/api/panel').then((r) => {
-      if (r.ok) this.filas.set(r.datos.entrenadores ?? []);
-      else this.error.set(r.error);
+      if (!r.ok) this.error.set(r.error);
+      else if (Array.isArray(r.datos?.entrenadores)) this.filas.set(r.datos.entrenadores);
+      else this.error.set('Algo salió mal. Inténtalo de nuevo.');
     });
   }
 

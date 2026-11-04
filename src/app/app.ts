@@ -28,6 +28,6 @@ export class App {
   }
 
   reintentar(): void {
-    void this.pulso.cargar();
+    void this.pulso.reintentar();
   }
 }

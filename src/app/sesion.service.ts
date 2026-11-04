@@ -66,7 +66,7 @@ export class SesionService {
       this.sinServidor.set(false);
       this.actual.set(aSesion(r.datos?.sesion));
     } else {
-      this.sinServidor.set(r.status === 0);
+      this.sinServidor.set(true);
       this.actual.set(null);
     }
   }
@@ -92,12 +92,11 @@ export class SesionService {
     return reg;
   }
 
-  async salir(): Promise<void> {
-    try {
-      await pedir('DELETE', '/api/sesion');
-    } finally {
-      this.actual.set(null);
-    }
+  async salir(): Promise<boolean> {
+    const r = await pedir('DELETE', '/api/sesion');
+    if (!r.ok) return false;
+    this.actual.set(null);
+    return true;
   }
 
   async pedirCodigo(correo: string): Promise<string | null> {
