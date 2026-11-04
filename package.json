@@ -6,7 +6,10 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "vitest run",
+    "typecheck:api": "tsc -p api/tsconfig.json",
+    "dev:api": "tsx --env-file=.env scripts/servidor-local.ts",
+    "e2e": "playwright test"
   },
   "private": true,
   "packageManager": "npm@11.19.1",
@@ -17,6 +20,7 @@
     "@angular/forms": "^21.2.0",
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
+    "@neondatabase/serverless": "^1.2.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -24,7 +28,11 @@
     "@angular/build": "^21.2.29",
     "@angular/cli": "^21.2.29",
     "@angular/compiler-cli": "^21.2.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.12"
   }
 }
