@@ -4,15 +4,31 @@ const correos = vi.hoisted(() => ({
   enviados: [] as { para: string; codigo: string }[],
   configurado: true,
   falla: false,
+  real: false,
+  smtp: [] as { to: unknown; text: string }[],
 }));
 
-vi.mock('../api/_lib/correo', () => ({
-  correoConfigurado: () => correos.configurado,
-  enviarCodigo: async (para: string, codigo: string) => {
-    if (correos.falla) throw Object.assign(new Error('sin-red a@x.com'), { code: 'ECONNECTION' });
-    correos.enviados.push({ para, codigo });
+vi.mock('nodemailer', () => ({
+  default: {
+    createTransport: () => ({
+      sendMail: async (m: { to: unknown; text: string }) => {
+        correos.smtp.push({ to: m.to, text: m.text });
+      },
+    }),
   },
 }));
+
+vi.mock('../api/_lib/correo', async () => {
+  const actual = await vi.importActual<typeof import('../api/_lib/correo')>('../api/_lib/correo');
+  return {
+    correoConfigurado: () => (correos.real ? actual.correoConfigurado() : correos.configurado),
+    enviarCodigo: async (para: string, codigo: string) => {
+      if (correos.real) return actual.enviarCodigo(para, codigo);
+      if (correos.falla) throw Object.assign(new Error('sin-red a@x.com'), { code: 'ECONNECTION' });
+      correos.enviados.push({ para, codigo });
+    },
+  };
+});
 
 import { sql } from '../api/_lib/db';
 import { POST as entrar } from '../api/entrar';
@@ -36,6 +52,8 @@ describeDb('recuperar contraseña', () => {
     correos.enviados.length = 0;
     correos.configurado = true;
     correos.falla = false;
+    correos.real = false;
+    correos.smtp.length = 0;
   });
 
   const llamar = (cuerpo: unknown, ip: string, extra: Record<string, string> = {}) =>
@@ -345,6 +363,127 @@ describeDb('recuperar contraseña', () => {
       llamar({ accion: 'cambiar', correo, codigo, clave: 'segunda12345' }, ipNueva()),
     ]);
     expect([a.status, b.status].sort()).toEqual([200, 400]);
+  });
+
+  it('confirmar y cambiar con un correo sin cuenta dan el mismo error que un código malo de una cuenta real', async () => {
+    const { correo } = await crearCuenta();
+    const codigo = await pedirCodigo(correo);
+    const inexistente = `nadie${contador}@mail.com`;
+    const contar = async () => ({
+      cuentas: String((await sql()`SELECT count(*) AS n FROM cuenta`)[0]['n']),
+      sesiones: String((await sql()`SELECT count(*) AS n FROM sesion`)[0]['n']),
+      recuperaciones: String((await sql()`SELECT count(*) AS n FROM recuperacion`)[0]['n']),
+    });
+    for (const accion of ['confirmar', 'cambiar'] as const) {
+      const extra = accion === 'cambiar' ? { clave: 'nueva123456' } : {};
+      const real = await llamar({ accion, correo, codigo: malo(codigo), ...extra }, ipNueva());
+      const antes = await contar();
+      const sin = await llamar({ accion, correo: inexistente, codigo: '123456', ...extra }, ipNueva());
+      expect(sin.status).toBe(real.status);
+      expect(sin.status).toBe(400);
+      expect(await sin.text()).toBe(await real.text());
+      expect(sin.headers.get('set-cookie')).toBeNull();
+      expect(await contar()).toEqual(antes);
+    }
+    expect(await sql()`SELECT 1 FROM cuenta WHERE correo = ${inexistente}`).toHaveLength(0);
+  });
+
+  it('diez fallos con el mismo correo desde la misma IP bloquean el siguiente intento con 429 y no cambian nada', async () => {
+    const { correo } = await crearCuenta('vieja12345');
+    const ip = ipNueva();
+    let codigo = await pedirCodigo(correo);
+    for (let i = 0; i < 10; i++) {
+      if (i === 5) {
+        await sql()`UPDATE recuperacion SET enviado_en = now() - interval '2 minutes'
+          WHERE cuenta_id = (SELECT id FROM cuenta WHERE correo = ${correo})`;
+        codigo = await pedirCodigo(correo);
+      }
+      const r = await llamar({ accion: 'confirmar', correo, codigo: malo(codigo) }, ip);
+      expect(r.status).toBe(400);
+    }
+    const r = await llamar({ accion: 'cambiar', correo, codigo, clave: 'nueva123456' }, ip);
+    expect(r.status).toBe(429);
+    expect((await texto(r)).error).toBe('Demasiados intentos. Espera 15 minutos.');
+    expect((await llamar({ accion: 'confirmar', correo, codigo }, ip)).status).toBe(429);
+    const entrada = await entrar(
+      pedido('POST', '/api/entrar', { correo, clave: 'vieja12345' }, undefined, { 'x-forwarded-for': ipNueva() }),
+    );
+    expect(entrada.status).toBe(200);
+  });
+
+  it('un origen ajeno da 403 en confirmar y cambiar sin tocar el código', async () => {
+    const { correo } = await crearCuenta('vieja12345');
+    const codigo = await pedirCodigo(correo);
+    const ip = ipNueva();
+    for (const accion of ['confirmar', 'cambiar'] as const) {
+      const extra = accion === 'cambiar' ? { clave: 'nueva123456' } : {};
+      const r = await llamar({ accion, correo, codigo, ...extra }, ip, { origin: 'https://otro.test' });
+      expect(r.status).toBe(403);
+      expect((await texto(r)).error).toBe('Origen no permitido.');
+      expect(r.headers.get('set-cookie')).toBeNull();
+    }
+    const fila = await filas(correo);
+    expect(fila).toHaveLength(1);
+    expect(fila[0]['intentos']).toBe(0);
+    expect(correos.enviados).toHaveLength(1);
+    const entrada = await entrar(
+      pedido('POST', '/api/entrar', { correo, clave: 'vieja12345' }, undefined, { 'x-forwarded-for': ipNueva() }),
+    );
+    expect(entrada.status).toBe(200);
+  });
+
+  describe('con el módulo de correo real', () => {
+    const claves = ['PULSO_CORREO_ARCHIVO', 'PULSO_E2E', 'VERCEL', 'CORREO_USUARIO', 'CORREO_CLAVE'] as const;
+    const guardado: Record<string, string | undefined> = {};
+    beforeEach(() => {
+      for (const k of claves) {
+        guardado[k] = process.env[k];
+        delete process.env[k];
+      }
+      correos.real = true;
+      return () => {
+        for (const k of claves) {
+          if (guardado[k] === undefined) delete process.env[k];
+          else process.env[k] = guardado[k];
+        }
+      };
+    });
+
+    it('sin variables de correo y sin modo archivo, pedir da 503 y no deja fila', async () => {
+      const { correo } = await crearCuenta();
+      const r = await llamar({ accion: 'pedir', correo }, ipNueva());
+      expect(r.status).toBe(503);
+      expect((await texto(r)).error).toBe('El envío de correo no está disponible por ahora.');
+      expect(await filas(correo)).toHaveLength(0);
+      expect(correos.smtp).toHaveLength(0);
+    });
+
+    it('con las variables de correo puestas, pedir envía el código a la cuenta', async () => {
+      const { correo } = await crearCuenta();
+      process.env['CORREO_USUARIO'] = 'pulso@gmail.com';
+      process.env['CORREO_CLAVE'] = 'clave-de-app';
+      const r = await llamar({ accion: 'pedir', correo }, ipNueva());
+      expect(r.status).toBe(200);
+      expect(await r.text()).toBe('{"ok":true}');
+      expect(correos.smtp).toHaveLength(1);
+      expect(correos.smtp[0].to).toEqual({ name: '', address: correo });
+      const codigo = /Tu código es (\d{6})\./.exec(correos.smtp[0].text)?.[1] ?? '';
+      expect(codigo).toMatch(/^\d{6}$/);
+      expect(await filas(correo)).toHaveLength(1);
+      expect((await llamar({ accion: 'confirmar', correo, codigo }, ipNueva())).status).toBe(200);
+    });
+  });
+
+  it('el pedido número 11 desde la misma IP en una hora da 429', async () => {
+    const ip = ipNueva();
+    for (let i = 0; i < 10; i++) {
+      const r = await llamar({ accion: 'pedir', correo: `nadie${contador}x${i}@mail.com` }, ip);
+      expect(r.status).toBe(200);
+    }
+    const r = await llamar({ accion: 'pedir', correo: `nadie${contador}x11@mail.com` }, ip);
+    expect(r.status).toBe(429);
+    expect((await texto(r)).error).toBe('Demasiados intentos. Inténtalo más tarde.');
+    expect(correos.enviados).toHaveLength(0);
   });
 });
 
