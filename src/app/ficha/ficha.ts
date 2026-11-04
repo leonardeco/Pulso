@@ -167,12 +167,13 @@ export class Ficha {
     this.avisoAcceso.set('Listo. Con ese correo entra y solo puede ver su plan.');
   }
 
-  quitarAcceso(): void {
+  async quitarAcceso(): Promise<void> {
     const cliente = this.cliente();
     if (!cliente) return;
-    this.pulso.quitarAcceso(cliente.id);
     this.avisoAcceso.set('');
     this.errorAcceso.set('');
+    const mensaje = await this.pulso.quitarAcceso(cliente.id);
+    if (mensaje) this.errorAcceso.set(mensaje);
   }
 
   borrarCliente() {

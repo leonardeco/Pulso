@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { subirCampoClave } from '../clave-campo';
+import { PulsoService } from '../pulso.service';
 import { SesionService } from '../sesion.service';
 import { TemaService } from '../tema.service';
 
@@ -12,6 +13,7 @@ import { TemaService } from '../tema.service';
 })
 export class Acceso {
   private sesion = inject(SesionService);
+  private pulso = inject(PulsoService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   readonly tema = inject(TemaService);
@@ -29,6 +31,12 @@ export class Acceso {
   confirma = '';
 
   constructor() {
+    if (this.pulso.sesionVencida()) {
+      this.error.set('Tu sesión venció. Entra de nuevo.');
+      this.pulso.sesionVencida.set(false);
+    } else if (this.sesion.sinServidor()) {
+      this.error.set('No pude conectar. Revisa tu internet e inténtalo de nuevo.');
+    }
     this.route.data.subscribe((data) => {
       this.registro.set(!!data['registro']);
       this.error.set('');
@@ -53,6 +61,7 @@ export class Acceso {
       this.error.set(mensaje);
       return;
     }
+    await this.pulso.trasEntrar(this.correo, this.clave);
     await this.router.navigateByUrl('/');
   }
 

@@ -1,8 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { modalidadDe, nombreModalidad, pesos, type Estado, type Modalidad } from '../modelos';
-import { PulsoService } from '../pulso.service';
-import { SesionService } from '../sesion.service';
+import { pedir } from '../api';
+import { pesos, type Modalidad } from '../modelos';
 
 interface FilaRutina {
   id: string;
@@ -29,17 +28,19 @@ interface FilaEntrenador {
   templateUrl: './estudio.html',
 })
 export class Estudio {
-  private readonly sesion = inject(SesionService);
-  private readonly pulso = inject(PulsoService);
   readonly pesos = pesos;
+  readonly filas = signal<FilaEntrenador[]>([]);
+  readonly error = signal('');
+
+  constructor() {
+    void pedir<{ entrenadores: FilaEntrenador[] }>('GET', '/api/panel').then((r) => {
+      if (r.ok) this.filas.set(r.datos.entrenadores ?? []);
+      else this.error.set(r.error);
+    });
+  }
 
   lista(): FilaEntrenador[] {
-    const propio = this.sesion.estudioId();
-    const vivo = this.pulso.estado();
-    return this.sesion
-      .entrenadores()
-      .map((cuenta) => fila(cuenta, cuenta.id === propio ? vivo : cuenta.estado))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    return this.filas();
   }
 
   entrenadores() {
@@ -61,31 +62,4 @@ export class Estudio {
       return suma + item.virtuales;
     }, 0);
   }
-}
-
-function fila(
-  cuenta: { id: string; nombre: string; correo: string },
-  estado: Estado | null,
-): FilaEntrenador {
-  const clientes = estado?.clientes ?? [];
-  const rutinas = (estado?.rutinas ?? []).map((rutina) => {
-    const cliente = clientes.find((item) => item.id === rutina.clienteId);
-    return {
-      id: rutina.id,
-      nombre: rutina.nombre || 'Rutina',
-      cliente: cliente?.nombre || 'Plantilla',
-      modalidad: cliente ? nombreModalidad(cliente.modalidad) : 'Plantilla',
-      precio: Number(rutina.precio) || 0,
-    };
-  });
-  return {
-    id: cuenta.id,
-    nombre: cuenta.nombre || 'Entrenador',
-    correo: cuenta.correo,
-    rutinas,
-    total: rutinas.reduce((suma, item) => suma + item.precio, 0),
-    personalizados: clientes.filter((item) => modalidadDe(item.modalidad) === 'personalizado').length,
-    semipersonalizados: clientes.filter((item) => modalidadDe(item.modalidad) === 'semipersonalizado').length,
-    virtuales: clientes.filter((item) => modalidadDe(item.modalidad) === 'virtual').length,
-  };
 }

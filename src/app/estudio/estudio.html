@@ -1,7 +1,7 @@
 <section class="pagina">
   <a class="texto" routerLink="/">Volver</a>
   <h1>Estudio</h1>
-  <p class="bajada">Entrenadores de este navegador, con las rutinas que crearon y el precio de cada una.</p>
+  <p class="bajada">Entrenadores registrados, con las rutinas que crearon y el precio de cada una.</p>
 
   <div class="resumen">
     <article>
@@ -33,8 +33,12 @@
     </article>
   </div>
 
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+
   @if (lista().length === 0) {
-    <p class="vacio">Todavía no hay entrenadores registrados aquí.</p>
+    <p class="vacio">Todavía no hay entrenadores registrados.</p>
   }
 
   @for (entrenador of lista(); track entrenador.id) {

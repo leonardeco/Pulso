@@ -140,6 +140,32 @@ p.aviso-cita {
   text-align: center;
 }
 
+p.estado-sync {
+  margin: 0;
+  padding: 12px max(var(--borde), env(safe-area-inset-right)) 12px max(var(--borde), env(safe-area-inset-left));
+  background: var(--card);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--texto);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.estado-sync.alerta {
+  color: var(--danger);
+}
+
+.estado-sync button {
+  min-height: 44px;
+}
+
+.carga-inicial {
+  color: var(--muted);
+  text-align: center;
+  padding: 48px 16px;
+  font-size: var(--texto);
+}
+
 .marca {
   display: block;
   flex: 1 1 120px;
