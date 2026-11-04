@@ -1,6 +1,7 @@
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
+import { pedir } from './api';
+import { cuentaLocal, estudioParaSubir, marcarSubido } from './datos-locales';
 import {
-  AccesoCliente,
   Cliente,
   DiaRutina,
   Ejercicio,
@@ -17,13 +18,16 @@ import {
   periodoActual,
   uid,
 } from './modelos';
-import { hashClave, SesionService } from './sesion.service';
+import { SesionService } from './sesion.service';
 
-const CLAVE_VIEJA = 'pulso.estado.v1';
-const LEGACY = 'pulso.legacy.asignado';
+const REINTENTO_MS = 15000;
+const ESPERA_MS = 600;
+const MAX_KEEPALIVE = 60 * 1024;
 
-function claveCuenta(id: string): string {
-  return `pulso.estado.${id}`;
+interface Respuesta {
+  estado: Estado;
+  version: number;
+  accesos?: Estado['accesos'];
 }
 
 function vacio(): Estado {
@@ -39,18 +43,17 @@ function vacio(): Estado {
   };
 }
 
-function olvidarEjemplo(): void {
-  if (typeof localStorage === 'undefined' || localStorage.getItem('pulso.vacio') === '1') return;
-  const borrar: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const clave = localStorage.key(i);
-    if (clave === CLAVE_VIEJA || clave === LEGACY || clave?.startsWith('pulso.estado.')) borrar.push(clave);
-  }
-  borrar.forEach((clave) => localStorage.removeItem(clave));
-  localStorage.setItem('pulso.vacio', '1');
+function sinAccesos(estado: Estado): Estado {
+  return { ...estado, accesos: [] };
 }
 
-olvidarEjemplo();
+function firma(estado: Estado): string {
+  return JSON.stringify(sinAccesos(estado));
+}
+
+function estaVacio(e: Estado): boolean {
+  return [e.servicios, e.clientes, e.citas, e.rutinas, e.tablas, e.pagos].every((l) => l.length === 0);
+}
 
 function normalizar(data: Estado): Estado {
   return {
@@ -71,65 +74,207 @@ function normalizar(data: Estado): Estado {
       tipo: pago.tipo ?? 'otro',
       periodo: pago.periodo ?? '',
     })),
-    accesos: (data.accesos ?? []).filter((acceso) => acceso?.clienteId && acceso.correo && acceso.hash),
+    accesos: (data.accesos ?? []).filter((acceso) => acceso?.clienteId && acceso.correo),
   };
-}
-
-function parseEstado(texto: string | null): Estado | null {
-  if (!texto) return null;
-  try {
-    const data = JSON.parse(texto) as Estado;
-    if (!data || !Array.isArray(data.clientes) || !Array.isArray(data.servicios)) return null;
-    return normalizar(data);
-  } catch {
-    return null;
-  }
-}
-
-function leerCuenta(id: string): Estado {
-  const propio = parseEstado(localStorage.getItem(claveCuenta(id)));
-  if (propio) return propio;
-  if (localStorage.getItem(LEGACY) !== id && !localStorage.getItem(LEGACY)) {
-    localStorage.setItem(LEGACY, id);
-    return parseEstado(localStorage.getItem(CLAVE_VIEJA)) ?? vacio();
-  }
-  return vacio();
 }
 
 @Injectable({ providedIn: 'root' })
 export class PulsoService {
   private sesion = inject(SesionService);
+  readonly estado = signal<Estado>(vacio());
+  readonly cargaFallida = signal(false);
+  readonly sinConexion = signal(false);
+  readonly conflicto = signal(false);
+  readonly sesionVencida = signal(false);
+
+  private version = 0;
+  private ultimoJson = '';
+  private temporizador: ReturnType<typeof setTimeout> | null = null;
+  private reintento: ReturnType<typeof setTimeout> | null = null;
   private listo = false;
-  private cargado: string | null = this.sesion.estudioId();
-  readonly estado = signal<Estado>(this.cargado ? leerCuenta(this.cargado) : vacio());
+  private enCurso: Promise<void> | null = null;
+  private repetir = false;
 
   constructor() {
-    if (this.cargado) this.listo = true;
-
     effect(() => {
-      const id = this.sesion.estudioId();
-      if (!id) {
-        this.listo = false;
-        this.cargado = null;
-        return;
-      }
-      if (this.cargado === id) {
-        this.listo = true;
-        return;
-      }
-      const estado = leerCuenta(id);
-      this.listo = false;
-      untracked(() => this.estado.set(estado));
-      this.cargado = id;
+      const actual = this.estado();
+      untracked(() => {
+        if (!this.listo || !this.sesion.esEntrenador() || firma(actual) === this.ultimoJson) return;
+        this.anular(this.temporizador);
+        this.temporizador = setTimeout(() => {
+          this.temporizador = null;
+          void this.guardarAhora();
+        }, ESPERA_MS);
+      });
+    });
+
+    if (typeof window === 'undefined') return;
+    window.addEventListener('online', () => {
+      if (this.sinConexion()) void this.guardarAhora();
+    });
+    window.addEventListener('pagehide', () => this.guardarAlSalir());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void this.refrescar();
+    });
+  }
+
+  async cargar(): Promise<void> {
+    const r = await pedir<Respuesta>('GET', '/api/estudio');
+    if (r.ok) {
+      this.aplicar(r.datos);
       this.listo = true;
-    });
+      this.cargaFallida.set(false);
+      return;
+    }
+    if (r.status === 401) {
+      this.vencer();
+      return;
+    }
+    this.listo = false;
+    this.cargaFallida.set(true);
+  }
 
-    effect(() => {
-      const id = this.sesion.estudioId();
-      const estado = this.estado();
-      if (!id || !this.listo || this.cargado !== id || this.sesion.esCliente()) return;
-      localStorage.setItem(claveCuenta(id), JSON.stringify(estado));
+  async trasEntrar(correo: string, clave: string): Promise<void> {
+    await this.cargar();
+    if (!this.sesion.esEntrenador() || !this.listo || !estaVacio(this.estado())) return;
+    const cuenta = await cuentaLocal(correo, clave);
+    if (!cuenta) return;
+    const subida = estudioParaSubir(cuenta);
+    if (!subida) return;
+    const r = await pedir<Respuesta>('PUT', '/api/estudio', {
+      version: this.version,
+      estado: sinAccesos(subida.estado),
+      accesosLegado: subida.accesosLegado,
     });
+    if (r.ok) {
+      marcarSubido(cuenta.id);
+      this.aplicar({ estado: { ...subida.estado, accesos: r.datos.accesos ?? [] }, version: r.datos.version });
+    } else if (r.status === 401) {
+      this.vencer();
+    }
+  }
+
+  async guardarAhora(): Promise<void> {
+    if (this.enCurso) {
+      this.repetir = true;
+      return this.enCurso;
+    }
+    this.enCurso = this.ciclo().finally(() => {
+      this.enCurso = null;
+    });
+    return this.enCurso;
+  }
+
+  async salir(): Promise<boolean> {
+    if (this.hayPendientes()) {
+      await this.guardarAhora();
+      if (this.sinConexion() && this.hayPendientes()) return false;
+    }
+    this.anular(this.temporizador);
+    this.anular(this.reintento);
+    this.temporizador = null;
+    this.reintento = null;
+    await this.sesion.salir();
+    this.listo = false;
+    this.version = 0;
+    this.ultimoJson = '';
+    this.estado.set(vacio());
+    this.sinConexion.set(false);
+    this.conflicto.set(false);
+    this.cargaFallida.set(false);
+    this.sesionVencida.set(false);
+    return true;
+  }
+
+  private hayPendientes(): boolean {
+    return this.listo && this.sesion.esEntrenador() && firma(this.estado()) !== this.ultimoJson;
+  }
+
+  private anular(t: ReturnType<typeof setTimeout> | null): void {
+    if (t !== null) clearTimeout(t);
+  }
+
+  private aplicar(datos: { estado: Estado; version: number }): void {
+    const estado = normalizar(datos.estado);
+    this.version = datos.version;
+    this.ultimoJson = firma(estado);
+    this.estado.set(estado);
+  }
+
+  private vencer(): void {
+    this.listo = false;
+    this.anular(this.temporizador);
+    this.anular(this.reintento);
+    this.temporizador = null;
+    this.reintento = null;
+    this.sesionVencida.set(true);
+    this.sesion.actual.set(null);
+  }
+
+  private async ciclo(): Promise<void> {
+    do {
+      this.repetir = false;
+      this.anular(this.temporizador);
+      this.temporizador = null;
+      if (!this.listo || !this.sesion.esEntrenador()) return;
+      const actual = this.estado();
+      const enviado = firma(actual);
+      if (enviado === this.ultimoJson) return;
+      const r = await pedir<Respuesta>('PUT', '/api/estudio', {
+        version: this.version,
+        estado: sinAccesos(actual),
+      });
+      if (!this.listo) return;
+      if (r.ok) {
+        this.version = r.datos.version;
+        this.ultimoJson = enviado;
+        this.sinConexion.set(false);
+        this.anular(this.reintento);
+        this.reintento = null;
+        if (firma(this.estado()) !== enviado) this.repetir = true;
+      } else if (r.status === 409 && r.datos) {
+        this.aplicar(r.datos);
+        this.conflicto.set(true);
+        this.sinConexion.set(false);
+        return;
+      } else if (r.status === 401) {
+        this.vencer();
+        return;
+      } else {
+        this.sinConexion.set(true);
+        this.anular(this.reintento);
+        this.reintento = setTimeout(() => {
+          this.reintento = null;
+          void this.guardarAhora();
+        }, REINTENTO_MS);
+        return;
+      }
+    } while (this.repetir);
+  }
+
+  private guardarAlSalir(): void {
+    if (!this.hayPendientes()) return;
+    const cuerpo = JSON.stringify({ version: this.version, estado: sinAccesos(this.estado()) });
+    if (new TextEncoder().encode(cuerpo).length >= MAX_KEEPALIVE) return;
+    void fetch('/api/estudio', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: cuerpo,
+      keepalive: true,
+    }).catch(() => undefined);
+  }
+
+  private async refrescar(): Promise<void> {
+    if (!this.listo || !this.sesion.activa() || this.enCurso || this.temporizador !== null) return;
+    if (this.hayPendientes()) return;
+    const r = await pedir<Respuesta>('GET', '/api/estudio');
+    if (r.ok) {
+      if (!this.listo || this.enCurso || this.hayPendientes()) return;
+      if (r.datos.version !== this.version) this.aplicar(r.datos);
+    } else if (r.status === 401) {
+      this.vencer();
+    }
   }
 
   agregarCliente(datos: Pick<Cliente, 'nombre' | 'telefono' | 'correo' | 'objetivo' | 'modalidad'>): string {
@@ -173,26 +318,32 @@ export class PulsoService {
     const mail = correo.trim().toLowerCase();
     if (!mail.includes('@') || mail.startsWith('@') || mail.endsWith('@')) return 'Escribe un correo válido.';
     if (clave.length < 8) return 'La contraseña necesita al menos 8 caracteres.';
-    if (this.sesion.hayEntrenador(mail)) return 'Ese correo ya es de un entrenador. Usa otro.';
     const actual = this.estado();
     if (!actual.clientes.some((cliente) => cliente.id === clienteId)) return 'No encuentro ese cliente.';
     if (actual.accesos.some((acceso) => acceso.correo === mail && acceso.clienteId !== clienteId)) {
       return 'Ese correo ya lo usa otro cliente.';
     }
-    const sal = uid();
-    const acceso: AccesoCliente = { clienteId, correo: mail, sal, hash: await hashClave(clave, sal) };
+    const r = await pedir<{ clienteId: string; correo: string }>('PUT', '/api/accesos', {
+      clienteId,
+      correo: mail,
+      clave,
+    });
+    if (!r.ok) return r.error;
     this.estado.update((estado) => ({
       ...estado,
-      accesos: [...estado.accesos.filter((item) => item.clienteId !== clienteId), acceso],
+      accesos: [...estado.accesos.filter((item) => item.clienteId !== clienteId), { clienteId, correo: mail }],
     }));
     return null;
   }
 
-  quitarAcceso(clienteId: string): void {
+  async quitarAcceso(clienteId: string): Promise<string | null> {
+    const r = await pedir('DELETE', '/api/accesos', { clienteId });
+    if (!r.ok) return r.error;
     this.estado.update((estado) => ({
       ...estado,
       accesos: estado.accesos.filter((acceso) => acceso.clienteId !== clienteId),
     }));
+    return null;
   }
 
   guardarServicio(servicio: Servicio): void {

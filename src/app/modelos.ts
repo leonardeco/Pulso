@@ -39,8 +39,6 @@ export interface Cliente {
 export interface AccesoCliente {
   clienteId: string;
   correo: string;
-  sal: string;
-  hash: string;
 }
 
 export interface Cita {
