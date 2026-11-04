@@ -1,0 +1,1 @@
+create table if not exists recuperacion (cuenta_id uuid primary key references cuenta on delete cascade, codigo_hash text not null, expira timestamptz not null, intentos integer not null default 0, enviado_en timestamptz not null default now());
