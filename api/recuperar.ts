@@ -5,6 +5,7 @@ import { sql } from './_lib/db';
 import { aceptaOrigen, cookieSesion, error, ipDe, json, leerJson, manejar } from './_lib/http';
 import { bloqueado, fallo, limpiar } from './_lib/intentos';
 import { abrir } from './_lib/sesion';
+import { correoUnico } from './_lib/validar';
 
 const NO_COINCIDE = 'Ese código no coincide o venció. Pide otro.';
 
@@ -16,8 +17,8 @@ export const POST = manejar(async (req: Request) => {
     codigo?: unknown;
     clave?: unknown;
   } | null;
-  const correo = typeof cuerpo?.correo === 'string' ? cuerpo.correo.trim().toLowerCase() : '';
-  if (!correo.includes('@') || correo.length > 254) return error('Escribe un correo válido.', 400);
+  const correo = correoUnico(cuerpo?.correo);
+  if (!correo) return error('Escribe un correo válido.', 400);
   const accion = cuerpo?.accion;
   if (accion !== 'pedir' && accion !== 'confirmar' && accion !== 'cambiar') {
     return error('Acción no válida.', 400);
@@ -30,37 +31,46 @@ export const POST = manejar(async (req: Request) => {
   const codigo = typeof cuerpo?.codigo === 'string' ? cuerpo.codigo : '';
   if (!/^\d{6}$/.test(codigo)) return error('El código tiene 6 números.', 400);
   const clave = typeof cuerpo?.clave === 'string' ? cuerpo.clave : '';
-  if (accion === 'cambiar' && (clave.length < 8 || clave.length > 200)) {
+  if (accion === 'cambiar' && clave.length > 200) {
+    return error('La contraseña no puede pasar de 200 caracteres.', 400);
+  }
+  if (accion === 'cambiar' && clave.length < 8) {
     return error('La contraseña necesita al menos 8 caracteres.', 400);
   }
 
+  // El intento se reserva antes de verificar, en una sola sentencia, para que
+  // las peticiones simultáneas no puedan pasar de 5.
   const filas = await sql()`
-    SELECT r.cuenta_id, r.codigo_hash
-    FROM recuperacion r JOIN cuenta c ON c.id = r.cuenta_id
-    WHERE c.correo = ${correo} AND r.expira > now()`;
+    UPDATE recuperacion r SET intentos = r.intentos + 1
+    FROM cuenta c
+    WHERE r.cuenta_id = c.id AND c.correo = ${correo} AND r.intentos < 5 AND r.expira > now()
+    RETURNING r.cuenta_id, r.codigo_hash, r.intentos`;
   const fila = filas[0];
   const r = await verificar(codigo, fila ? String(fila['codigo_hash']) : HASH_FALSO);
   if (!fila || !r.ok) {
-    if (fila) {
-      const cuentaId = String(fila['cuenta_id']);
-      const usos = await sql()`
-        UPDATE recuperacion SET intentos = intentos + 1 WHERE cuenta_id = ${cuentaId}::uuid RETURNING intentos`;
-      if (usos[0] && Number(usos[0]['intentos']) >= 5) {
-        await sql()`DELETE FROM recuperacion WHERE cuenta_id = ${cuentaId}::uuid`;
-      }
+    if (fila && Number(fila['intentos']) >= 5) {
+      await sql()`
+        DELETE FROM recuperacion
+        WHERE cuenta_id = ${String(fila['cuenta_id'])}::uuid AND codigo_hash = ${String(fila['codigo_hash'])}`;
     }
     await fallo(llave, 10, 15);
     return error(NO_COINCIDE, 400);
   }
 
-  if (accion === 'confirmar') return json({ ok: true });
-
   const cuentaId = String(fila['cuenta_id']);
+  const hashCodigo = String(fila['codigo_hash']);
+  if (accion === 'confirmar') {
+    await sql()`
+      UPDATE recuperacion SET intentos = intentos - 1
+      WHERE cuenta_id = ${cuentaId}::uuid AND codigo_hash = ${hashCodigo} AND intentos > 0`;
+    return json({ ok: true });
+  }
+
   const nuevo = await crearHash(clave);
   const cambio = await sql()`
     WITH usado AS (
       DELETE FROM recuperacion
-      WHERE cuenta_id = ${cuentaId}::uuid AND codigo_hash = ${String(fila['codigo_hash'])} AND expira > now()
+      WHERE cuenta_id = ${cuentaId}::uuid AND codigo_hash = ${hashCodigo} AND expira > now() AND intentos <= 5
       RETURNING cuenta_id
     ),
     nueva AS (
@@ -69,7 +79,7 @@ export const POST = manejar(async (req: Request) => {
       RETURNING id, nombre, correo, es_admin
     ),
     cerradas AS (
-      DELETE FROM sesion WHERE cuenta_id IN (SELECT id FROM nueva)
+      DELETE FROM sesion WHERE rol = 'entrenador' AND cuenta_id IN (SELECT id FROM nueva)
     )
     SELECT id, nombre, correo, es_admin FROM nueva`;
   const c = cambio[0];
@@ -121,9 +131,12 @@ async function pedir(req: Request, correo: string): Promise<Response> {
       codigo_hash = EXCLUDED.codigo_hash, expira = EXCLUDED.expira, intentos = 0, enviado_en = EXCLUDED.enviado_en`;
   try {
     await enviarCodigo(correo, codigo);
-  } catch {
+  } catch (e) {
+    const err = e as { name?: unknown; code?: unknown } | null;
+    const nombre = typeof err?.name === 'string' ? err.name : undefined;
+    const codigoError = typeof err?.code === 'string' ? err.code : undefined;
+    console.error('recuperar: no se pudo enviar', nombre, codigoError);
     await sql()`DELETE FROM recuperacion WHERE cuenta_id = ${cuentaId}::uuid`;
-    console.error('recuperar: no se pudo enviar');
     return error('No pude enviar el correo ahora. Inténtalo en unos minutos.', 503);
   }
   return json({ ok: true });

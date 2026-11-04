@@ -74,7 +74,7 @@ describeDb('cuenta', () => {
     const c = pedido('DELETE', '/api/sesion', undefined, undefined, malo);
     expect((await salir(c)).status).toBe(403);
   });
-  it('TC-5.2 límites de clave, nombre y correo; el correo se normaliza', async () => {
+  it('límites de clave, nombre y correo; el correo se normaliza', async () => {
     let n = 0;
     const reg = async (campos: { nombre?: string; correo?: string; clave?: string }) => {
       n += 1;

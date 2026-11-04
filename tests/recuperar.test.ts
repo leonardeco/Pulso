@@ -9,7 +9,7 @@ const correos = vi.hoisted(() => ({
 vi.mock('../api/_lib/correo', () => ({
   correoConfigurado: () => correos.configurado,
   enviarCodigo: async (para: string, codigo: string) => {
-    if (correos.falla) throw new Error('sin-red');
+    if (correos.falla) throw Object.assign(new Error('sin-red a@x.com'), { code: 'ECONNECTION' });
     correos.enviados.push({ para, codigo });
   },
 }));
@@ -18,6 +18,7 @@ import { sql } from '../api/_lib/db';
 import { POST as entrar } from '../api/entrar';
 import { POST as recuperar } from '../api/recuperar';
 import { POST as registro } from '../api/registro';
+import { abrir } from '../api/_lib/sesion';
 import { GET as sesion } from '../api/sesion';
 import { cookieDe, describeDb, pedido, prepararDb } from './ayuda';
 
@@ -202,11 +203,13 @@ describeDb('recuperar contraseña', () => {
     expect((await llamar({ accion: 'cambiar', correo, codigo, clave: 'nueva123456' }, ip)).status).toBe(200);
   });
 
-  it('una clave de 200 caracteres sirve y la de 201 da 400', async () => {
+  it('una clave de 200 caracteres sirve y la de 201 da 400 con su mensaje', async () => {
     const { correo } = await crearCuenta();
     const codigo = await pedirCodigo(correo);
     const ip = ipNueva();
-    expect((await llamar({ accion: 'cambiar', correo, codigo, clave: 'a'.repeat(201) }, ip)).status).toBe(400);
+    const larga = await llamar({ accion: 'cambiar', correo, codigo, clave: 'a'.repeat(201) }, ip);
+    expect(larga.status).toBe(400);
+    expect((await texto(larga)).error).toBe('La contraseña no puede pasar de 200 caracteres.');
     expect((await llamar({ accion: 'cambiar', correo, codigo, clave: 'a'.repeat(200) }, ip)).status).toBe(200);
   });
 
@@ -247,7 +250,7 @@ describeDb('recuperar contraseña', () => {
     expect(r.status).toBe(503);
     expect((await texto(r)).error).toBe('No pude enviar el correo ahora. Inténtalo en unos minutos.');
     expect(await filas(correo)).toHaveLength(0);
-    expect(mensajes).toBe('[["recuperar: no se pudo enviar"]]');
+    expect(mensajes).toBe('[["recuperar: no se pudo enviar","Error","ECONNECTION"]]');
   });
 
   it('diez fallos seguidos dan 429', async () => {
@@ -273,6 +276,67 @@ describeDb('recuperar contraseña', () => {
     expect(correos.enviados).toHaveLength(3);
   });
 
+  it('una lista de direcciones se rechaza con 400 y no se envía nada', async () => {
+    const { correo } = await crearCuenta();
+    const ip = ipNueva();
+    for (const lista of [`${correo},otro@mail.com`, `${correo};otro@mail.com`, `Ana <${correo}>`]) {
+      const r = await llamar({ accion: 'pedir', correo: lista }, ip);
+      expect(r.status).toBe(400);
+      expect((await texto(r)).error).toBe('Escribe un correo válido.');
+      const reg = await registro(
+        pedido('POST', '/api/registro', { nombre: 'Ana', correo: lista, clave: 'secreta123' }, undefined, {
+          'x-forwarded-for': ipNueva(),
+        }),
+      );
+      expect(reg.status).toBe(400);
+      expect((await texto(reg)).error).toBe('Escribe un correo válido.');
+    }
+    expect(correos.enviados).toHaveLength(0);
+  });
+
+  it('veinte confirmaciones malas a la vez no pasan de cinco intentos y borran el código', async () => {
+    const { correo } = await crearCuenta();
+    const codigo = await pedirCodigo(correo);
+    const respuestas = await Promise.all(
+      Array.from({ length: 20 }, () => llamar({ accion: 'confirmar', correo, codigo: malo(codigo) }, ipNueva())),
+    );
+    expect(respuestas.every((r) => r.status === 400)).toBe(true);
+    const restantes = await filas(correo);
+    expect(restantes.length === 0 || Number(restantes[0]['intentos']) <= 5).toBe(true);
+    expect(restantes).toHaveLength(0);
+    expect((await llamar({ accion: 'confirmar', correo, codigo }, ipNueva())).status).toBe(400);
+  });
+
+  it('tras cuatro fallos el quinto intento correcto sirve, también confirmar y luego cambiar', async () => {
+    const { correo } = await crearCuenta();
+    const codigo = await pedirCodigo(correo);
+    const ip = ipNueva();
+    for (let i = 0; i < 4; i++) {
+      expect((await llamar({ accion: 'confirmar', correo, codigo: malo(codigo) }, ip)).status).toBe(400);
+    }
+    expect((await llamar({ accion: 'confirmar', correo, codigo }, ip)).status).toBe(200);
+    expect((await filas(correo))[0]['intentos']).toBe(4);
+    const r = await llamar({ accion: 'cambiar', correo, codigo, clave: 'nueva123456' }, ip);
+    expect(r.status).toBe(200);
+    expect(await filas(correo)).toHaveLength(0);
+  });
+
+  it('recuperar la clave no cierra la sesión de un cliente y sí las del entrenador', async () => {
+    const { correo, cookie } = await crearCuenta();
+    const id = String((await sql()`SELECT id FROM cuenta WHERE correo = ${correo}`)[0]['id']);
+    const cliente = `cli${contador}@mail.com`;
+    await sql()`INSERT INTO acceso_cliente (cliente_id, entrenador_id, correo, clave_hash) VALUES ('c1', ${id}::uuid, ${cliente}, 'x')`;
+    const token = await abrir('cliente', id, 'c1');
+    const cookieCliente = `pulso_sesion=${token}`;
+    expect(await estadoSesion(cookieCliente)).not.toBeNull();
+
+    const codigo = await pedirCodigo(correo);
+    const r = await llamar({ accion: 'cambiar', correo, codigo, clave: 'nueva123456' }, ipNueva());
+    expect(r.status).toBe(200);
+    expect(await estadoSesion(cookie)).toBeNull();
+    expect(await estadoSesion(cookieCliente)).not.toBeNull();
+  });
+
   it('dos cambios a la vez con el mismo código dan un solo 200', async () => {
     const { correo } = await crearCuenta();
     const codigo = await pedirCodigo(correo);
@@ -285,7 +349,7 @@ describeDb('recuperar contraseña', () => {
 });
 
 describe('correoConfigurado', () => {
-  const claves = ['PULSO_CORREO_ARCHIVO', 'VERCEL', 'CORREO_USUARIO', 'CORREO_CLAVE'] as const;
+  const claves = ['PULSO_CORREO_ARCHIVO', 'PULSO_E2E', 'VERCEL', 'CORREO_USUARIO', 'CORREO_CLAVE'] as const;
   const guardado: Record<string, string | undefined> = {};
   beforeEach(() => {
     for (const k of claves) {
@@ -304,8 +368,27 @@ describe('correoConfigurado', () => {
 
   it('es falso con el archivo de pruebas dentro de Vercel y sin variables de correo', async () => {
     process.env['PULSO_CORREO_ARCHIVO'] = 'test-results/correos.jsonl';
+    process.env['PULSO_E2E'] = '1';
     process.env['VERCEL'] = '1';
     expect((await real())()).toBe(false);
+  });
+
+  it('es falso con el archivo de pruebas si no se pidió el modo de pruebas', async () => {
+    process.env['PULSO_CORREO_ARCHIVO'] = 'test-results/correos.jsonl';
+    expect((await real())()).toBe(false);
+  });
+
+  it('es falso con el archivo de pruebas en producción', async () => {
+    process.env['PULSO_CORREO_ARCHIVO'] = 'test-results/correos.jsonl';
+    process.env['PULSO_E2E'] = '1';
+    const antes = process.env['NODE_ENV'];
+    process.env['NODE_ENV'] = 'production';
+    try {
+      expect((await real())()).toBe(false);
+    } finally {
+      if (antes === undefined) delete process.env['NODE_ENV'];
+      else process.env['NODE_ENV'] = antes;
+    }
   });
 
   it('es falso con las variables vacías o solo espacios', async () => {
@@ -316,8 +399,10 @@ describe('correoConfigurado', () => {
 
   it('es cierto con el archivo de pruebas fuera de Vercel o con las dos variables', async () => {
     process.env['PULSO_CORREO_ARCHIVO'] = 'test-results/correos.jsonl';
+    process.env['PULSO_E2E'] = '1';
     expect((await real())()).toBe(true);
     delete process.env['PULSO_CORREO_ARCHIVO'];
+    delete process.env['PULSO_E2E'];
     process.env['CORREO_USUARIO'] = 'a@gmail.com';
     process.env['CORREO_CLAVE'] = 'abcd';
     expect((await real())()).toBe(true);

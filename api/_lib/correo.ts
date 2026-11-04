@@ -4,7 +4,9 @@ import nodemailer from 'nodemailer';
 
 function archivoDePrueba(): string | null {
   const archivo = process.env['PULSO_CORREO_ARCHIVO'];
-  return archivo && !process.env['VERCEL'] ? archivo : null;
+  const esPrueba =
+    process.env['PULSO_E2E'] === '1' && process.env['NODE_ENV'] !== 'production' && !process.env['VERCEL'];
+  return archivo && esPrueba ? archivo : null;
 }
 
 function credenciales(): { usuario: string; clave: string } | null {
@@ -36,7 +38,7 @@ export async function enviarCodigo(para: string, codigo: string): Promise<void> 
   });
   await transporte.sendMail({
     from: `Pulso <${cred.usuario}>`,
-    to: para,
+    to: { name: '', address: para },
     subject: 'Tu código para recuperar Pulso',
     text: [`Tu código es ${codigo}.`, 'Vence en 10 minutos.', 'Si no lo pediste, ignora este correo.'].join('\n'),
   });

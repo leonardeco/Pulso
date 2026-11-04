@@ -3,15 +3,16 @@ import { sql } from './_lib/db';
 import { estadoDe } from './_lib/estudio';
 import { ErrorHttp, aceptaOrigen, error, json, leerJson, manejar } from './_lib/http';
 import { exigir } from './_lib/sesion';
+import { correoUnico } from './_lib/validar';
 
 export const PUT = manejar(async (req: Request) => {
   if (!aceptaOrigen(req)) return error('Origen no permitido.', 403);
   const s = await exigir(req, 'entrenador');
   const cuerpo = (await leerJson(req)) as { clienteId?: unknown; correo?: unknown; clave?: unknown } | null;
   const clienteId = typeof cuerpo?.clienteId === 'string' ? cuerpo.clienteId : '';
-  const correo = typeof cuerpo?.correo === 'string' ? cuerpo.correo.trim().toLowerCase() : '';
+  const correo = correoUnico(cuerpo?.correo);
   const clave = typeof cuerpo?.clave === 'string' ? cuerpo.clave : '';
-  if (!correo.includes('@') || correo.length > 254) throw new ErrorHttp(400, 'Escribe un correo válido.');
+  if (!correo) throw new ErrorHttp(400, 'Escribe un correo válido.');
   if (clave.length < 8 || clave.length > 200) {
     throw new ErrorHttp(400, 'La contraseña necesita al menos 8 caracteres.');
   }

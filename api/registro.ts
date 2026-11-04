@@ -5,6 +5,7 @@ import { ESTADO_VACIO } from './_lib/estudio';
 import { ErrorHttp, aceptaOrigen, cookieSesion, error, ipDe, json, leerJson, manejar } from './_lib/http';
 import { bloqueado, fallo } from './_lib/intentos';
 import { abrir } from './_lib/sesion';
+import { correoUnico } from './_lib/validar';
 
 const MAX = 10;
 const MINUTOS = 60;
@@ -17,10 +18,10 @@ export const POST = manejar(async (req: Request) => {
   await fallo(llave, MAX, MINUTOS);
 
   const nombre = typeof cuerpo?.nombre === 'string' ? cuerpo.nombre.trim() : '';
-  const correo = typeof cuerpo?.correo === 'string' ? cuerpo.correo.trim().toLowerCase() : '';
+  const correo = correoUnico(cuerpo?.correo);
   const clave = typeof cuerpo?.clave === 'string' ? cuerpo.clave : '';
   if (nombre.length < 2 || nombre.length > 120) throw new ErrorHttp(400, 'Escribe tu nombre.');
-  if (!correo.includes('@') || correo.length > 254) throw new ErrorHttp(400, 'Escribe un correo válido.');
+  if (!correo) throw new ErrorHttp(400, 'Escribe un correo válido.');
   if (clave.length < 8 || clave.length > 200) {
     throw new ErrorHttp(400, 'La contraseña necesita al menos 8 caracteres.');
   }
