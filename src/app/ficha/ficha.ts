@@ -1,10 +1,12 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
-import { EJERCICIOS, MOMENTOS, etiquetaPeriodo, hoyISO, periodoActual, pesos } from '../modelos';
+import { EJERCICIOS, MODALIDADES, MOMENTOS, etiquetaPeriodo, hoyISO, imagenEjercicio, modalidadDe, nombreModalidad, periodoActual, pesos, type Rutina, type Tabla } from '../modelos';
 import { PulsoService } from '../pulso.service';
+import { subirCampoClave } from '../clave-campo';
+import { abrirPdf, htmlRutinas, htmlTablas } from '../exportar';
 
 @Component({
   selector: 'app-ficha',
@@ -14,6 +16,11 @@ import { PulsoService } from '../pulso.service';
 export class Ficha {
   readonly pulso = inject(PulsoService);
   readonly ejercicios = EJERCICIOS;
+  readonly modalidades = MODALIDADES;
+  readonly nombreModalidad = nombreModalidad;
+  readonly foto = imagenEjercicio;
+  readonly claveAbierta = signal(false);
+  readonly foco = signal('');
   readonly momentos = MOMENTOS;
   readonly pesos = pesos;
   readonly etiquetaPeriodo = etiquetaPeriodo;
@@ -22,6 +29,13 @@ export class Ficha {
   pestana = 'datos';
   concepto = '';
   valor = 80000;
+  accesoCorreo = '';
+  accesoClave = '';
+  accesoConfirma = '';
+  readonly verClave = signal(false);
+  readonly verConfirma = signal(false);
+  readonly errorAcceso = signal('');
+  readonly avisoAcceso = signal('');
 
   private readonly id = toSignal(
     inject(ActivatedRoute).paramMap.pipe(map((params) => params.get('id') ?? '')),
@@ -29,6 +43,23 @@ export class Ficha {
   );
 
   readonly cliente = computed(() => this.pulso.estado().clientes.find((item) => item.id === this.id()));
+  readonly acceso = computed(() => this.pulso.estado().accesos.find((item) => item.clienteId === this.id()));
+
+  private readonly alCambiarCliente = effect(() => {
+    const id = this.id();
+    untracked(() => {
+      const estado = this.pulso.estado();
+      const acceso = estado.accesos.find((item) => item.clienteId === id);
+      const cliente = estado.clientes.find((item) => item.id === id);
+      this.accesoCorreo = acceso?.correo || cliente?.correo || '';
+      this.accesoClave = '';
+      this.accesoConfirma = '';
+      this.verClave.set(false);
+      this.verConfirma.set(false);
+      this.errorAcceso.set('');
+      this.avisoAcceso.set('');
+    });
+  });
   readonly rutinas = computed(() => this.pulso.estado().rutinas.filter((item) => item.clienteId === this.id()));
   readonly plantillas = computed(() => this.pulso.estado().rutinas.filter((item) => item.clienteId === null));
   readonly tablas = computed(() => this.pulso.estado().tablas.filter((item) => item.clienteId === this.id()));
@@ -44,6 +75,10 @@ export class Ficha {
     return (evento.target as HTMLInputElement).value;
   }
 
+  numero(evento: Event) {
+    return Math.max(0, Math.round(Number(this.texto(evento)) || 0));
+  }
+
   campo(campo: 'nombre' | 'telefono' | 'correo' | 'objetivo' | 'notas' | 'peso' | 'estatura', evento: Event) {
     const cliente = this.cliente();
     if (!cliente) return;
@@ -55,6 +90,12 @@ export class Ficha {
     if (campo === 'notas') this.pulso.actualizarCliente(cliente.id, { notas: valor });
     if (campo === 'peso') this.pulso.actualizarCliente(cliente.id, { peso: valor });
     if (campo === 'estatura') this.pulso.actualizarCliente(cliente.id, { estatura: valor });
+  }
+
+  modalidad(valor: string) {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    this.pulso.actualizarCliente(cliente.id, { modalidad: modalidadDe(valor) });
   }
 
   servicio(id: string) {
@@ -107,10 +148,63 @@ export class Ficha {
     this.valor = 80000;
   }
 
+  async guardarAcceso(): Promise<void> {
+    this.errorAcceso.set('');
+    this.avisoAcceso.set('');
+    if (this.accesoClave !== this.accesoConfirma) {
+      this.errorAcceso.set('Las contraseñas no coinciden.');
+      return;
+    }
+    const cliente = this.cliente();
+    if (!cliente) return;
+    const mensaje = await this.pulso.darAcceso(cliente.id, this.accesoCorreo, this.accesoClave);
+    if (mensaje) {
+      this.errorAcceso.set(mensaje);
+      return;
+    }
+    this.accesoClave = '';
+    this.accesoConfirma = '';
+    this.avisoAcceso.set('Listo. Con ese correo entra y solo puede ver su plan.');
+  }
+
+  quitarAcceso(): void {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    this.pulso.quitarAcceso(cliente.id);
+    this.avisoAcceso.set('');
+    this.errorAcceso.set('');
+  }
+
   borrarCliente() {
     const cliente = this.cliente();
     if (!cliente) return;
     if (!confirm(`¿Quitar a ${cliente.nombre} y sus citas?`)) return;
     this.pulso.eliminarCliente(cliente.id);
+  }
+
+  pdfRutina(rutina: Rutina) {
+    const cliente = this.cliente()?.nombre || 'Cliente';
+    abrirPdf(rutina.nombre || 'Rutina', htmlRutinas(cliente, [rutina]));
+  }
+
+  pdfTabla(tabla: Tabla) {
+    const cliente = this.cliente()?.nombre || 'Cliente';
+    abrirPdf(tabla.nombre || 'Alimentación', htmlTablas(cliente, [tabla]));
+  }
+
+  abrirClave(evento: Event) {
+    const campo = evento.target;
+    this.claveAbierta.set(true);
+    this.foco.set(campo instanceof HTMLInputElement ? campo.name : '');
+    subirCampoClave(campo);
+  }
+
+  cerrarClave() {
+    setTimeout(() => {
+      const activo = document.activeElement;
+      if (activo instanceof HTMLElement && activo.closest('.clave')) return;
+      this.claveAbierta.set(false);
+      this.foco.set('');
+    }, 1200);
   }
 }

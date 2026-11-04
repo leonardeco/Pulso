@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { DIAS, etiquetaFecha, hoyISO, sumarDias } from '../modelos';
+import { DIAS, etiquetaFecha, hoyISO, nombreModalidad, sumarDias } from '../modelos';
 import { PulsoService } from '../pulso.service';
 
 @Component({
@@ -24,6 +24,10 @@ export class Agenda {
 
   cliente(id: string) {
     return this.pulso.estado().clientes.find((item) => item.id === id);
+  }
+
+  modalidad(id: string) {
+    return nombreModalidad(this.cliente(id)?.modalidad);
   }
 
   servicio(id: string) {

@@ -1,5 +1,6 @@
-import { Injectable, effect, signal } from '@angular/core';
+import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import {
+  AccesoCliente,
   Cliente,
   DiaRutina,
   Ejercicio,
@@ -12,137 +13,44 @@ import {
   buscarCliente,
   fechaISO,
   hoyISO,
+  modalidadDe,
   periodoActual,
-  sumarDias,
   uid,
 } from './modelos';
+import { hashClave, SesionService } from './sesion.service';
 
-const CLAVE = 'pulso.estado.v1';
+const CLAVE_VIEJA = 'pulso.estado.v1';
+const LEGACY = 'pulso.legacy.asignado';
 
-function jornada(): [string, string][] {
-  return [
-    ['06:00', '12:00'],
-    ['14:00', '19:00'],
-  ];
+function claveCuenta(id: string): string {
+  return `pulso.estado.${id}`;
 }
 
-function ejemplo(): Estado {
-  const ana = uid();
-  const diego = uid();
-  const valoracion = uid();
-  const sesion = uid();
-  const seguimiento = uid();
-  const hoy = hoyISO();
-  const mes = periodoActual(hoy);
-  const manana = sumarDias(hoy, 1);
-
+function vacio(): Estado {
   return {
-    servicios: [
-      { id: valoracion, nombre: 'Valoración', minutos: 45, precio: 60000 },
-      { id: sesion, nombre: 'Sesión de entrenamiento', minutos: 60, precio: 80000 },
-      { id: seguimiento, nombre: 'Seguimiento', minutos: 30, precio: 40000 },
-    ],
-    horario: {
-      '1': jornada(),
-      '2': jornada(),
-      '3': jornada(),
-      '4': jornada(),
-      '5': jornada(),
-      '6': [['07:00', '12:00']],
-      '0': [],
-    },
-    clientes: [
-      {
-        id: ana,
-        nombre: 'Ana Ríos',
-        telefono: '3001112233',
-        correo: 'ana@correo.com',
-        objetivo: 'Ganar fuerza y moverse sin miedo de la rodilla',
-        notas: 'Molestia leve en la rodilla derecha. Las primeras semanas, poco impacto.',
-        peso: '64',
-        estatura: '165',
-        mensualidad: 220000,
-        valoracionMensual: 60000,
-      },
-      {
-        id: diego,
-        nombre: 'Diego Pardo',
-        telefono: '3015556677',
-        correo: 'diego@correo.com',
-        objetivo: 'Bajar grasa sin dejar el fútbol de los martes',
-        notas: 'Juega los martes en la noche. Ese día la sesión va más suave.',
-        peso: '82',
-        estatura: '178',
-        mensualidad: 280000,
-        valoracionMensual: 60000,
-      },
-    ],
-    citas: [
-      { id: uid(), servicioId: sesion, clienteId: ana, fecha: hoy, hora: '07:00', estado: 'pendiente' },
-      { id: uid(), servicioId: seguimiento, clienteId: diego, fecha: manana, hora: '16:00', estado: 'pendiente' },
-    ],
-    rutinas: [
-      {
-        id: uid(),
-        clienteId: ana,
-        nombre: 'Base de fuerza',
-        dias: [
-          {
-            id: uid(),
-            nombre: 'Tren inferior',
-            ejercicios: [
-              { id: uid(), nombre: 'Sentadilla goblet', series: '3', reps: '8', descanso: '90s' },
-              { id: uid(), nombre: 'Puente de glúteo', series: '3', reps: '12', descanso: '60s' },
-              { id: uid(), nombre: 'Plancha', series: '3', reps: '30s', descanso: '45s' },
-            ],
-          },
-          {
-            id: uid(),
-            nombre: 'Tren superior',
-            ejercicios: [
-              { id: uid(), nombre: 'Press banca', series: '3', reps: '8', descanso: '90s' },
-              { id: uid(), nombre: 'Remo con barra', series: '3', reps: '10', descanso: '75s' },
-            ],
-          },
-        ],
-      },
-      {
-        id: uid(),
-        clienteId: null,
-        nombre: 'Plantilla full body',
-        dias: [
-          {
-            id: uid(),
-            nombre: 'Día A',
-            ejercicios: [
-              { id: uid(), nombre: 'Sentadilla', series: '3', reps: '8', descanso: '90s' },
-              { id: uid(), nombre: 'Press banca', series: '3', reps: '8', descanso: '90s' },
-              { id: uid(), nombre: 'Remo con barra', series: '3', reps: '10', descanso: '75s' },
-            ],
-          },
-        ],
-      },
-    ],
-    tablas: [
-      {
-        id: uid(),
-        clienteId: diego,
-        nombre: 'Día de entrenamiento',
-        filas: [
-          { id: uid(), momento: 'Desayuno', alimento: 'Arepa con huevos y aguacate', cantidad: '1 arepa y 2 huevos', nota: '' },
-          { id: uid(), momento: 'Almuerzo', alimento: 'Arroz, frijoles y pechuga', cantidad: '1 plato', nota: 'Poca fritura' },
-          { id: uid(), momento: 'Cena', alimento: 'Pescado con ensalada', cantidad: '1 porción', nota: '' },
-        ],
-      },
-    ],
-    pagos: [
-      { id: uid(), clienteId: ana, tipo: 'mensualidad', periodo: mes, concepto: 'Mensualidad', valor: 220000, fecha: hoy, estado: 'pendiente' },
-      { id: uid(), clienteId: ana, tipo: 'valoracion', periodo: mes, concepto: 'Valoración del mes', valor: 60000, fecha: hoy, estado: 'pendiente' },
-      { id: uid(), clienteId: diego, tipo: 'mensualidad', periodo: mes, concepto: 'Mensualidad', valor: 280000, fecha: hoy, estado: 'pagado' },
-      { id: uid(), clienteId: diego, tipo: 'valoracion', periodo: mes, concepto: 'Valoración del mes', valor: 60000, fecha: hoy, estado: 'pagado' },
-    ],
+    servicios: [],
+    horario: { '1': [], '2': [], '3': [], '4': [], '5': [], '6': [], '0': [] },
+    clientes: [],
+    citas: [],
+    rutinas: [],
+    tablas: [],
+    pagos: [],
+    accesos: [],
   };
 }
+
+function olvidarEjemplo(): void {
+  if (typeof localStorage === 'undefined' || localStorage.getItem('pulso.vacio') === '1') return;
+  const borrar: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const clave = localStorage.key(i);
+    if (clave === CLAVE_VIEJA || clave === LEGACY || clave?.startsWith('pulso.estado.')) borrar.push(clave);
+  }
+  borrar.forEach((clave) => localStorage.removeItem(clave));
+  localStorage.setItem('pulso.vacio', '1');
+}
+
+olvidarEjemplo();
 
 function normalizar(data: Estado): Estado {
   return {
@@ -151,43 +59,80 @@ function normalizar(data: Estado): Estado {
       ...cliente,
       mensualidad: Number(cliente.mensualidad) || 0,
       valoracionMensual: Number(cliente.valoracionMensual) || 0,
+      modalidad: modalidadDe(cliente.modalidad),
+    })),
+    rutinas: (data.rutinas ?? []).map((rutina) => ({
+      ...rutina,
+      precio: Number(rutina.precio) || 0,
+      dias: rutina.dias ?? [],
     })),
     pagos: (data.pagos ?? []).map((pago) => ({
       ...pago,
       tipo: pago.tipo ?? 'otro',
       periodo: pago.periodo ?? '',
     })),
+    accesos: (data.accesos ?? []).filter((acceso) => acceso?.clienteId && acceso.correo && acceso.hash),
   };
 }
 
-function leer(): Estado {
+function parseEstado(texto: string | null): Estado | null {
+  if (!texto) return null;
   try {
-    const texto = localStorage.getItem(CLAVE);
-    if (!texto) return ejemplo();
     const data = JSON.parse(texto) as Estado;
-    if (!data || !Array.isArray(data.clientes) || !Array.isArray(data.servicios)) return ejemplo();
+    if (!data || !Array.isArray(data.clientes) || !Array.isArray(data.servicios)) return null;
     return normalizar(data);
   } catch {
-    return ejemplo();
+    return null;
   }
+}
+
+function leerCuenta(id: string): Estado {
+  const propio = parseEstado(localStorage.getItem(claveCuenta(id)));
+  if (propio) return propio;
+  if (localStorage.getItem(LEGACY) !== id && !localStorage.getItem(LEGACY)) {
+    localStorage.setItem(LEGACY, id);
+    return parseEstado(localStorage.getItem(CLAVE_VIEJA)) ?? vacio();
+  }
+  return vacio();
 }
 
 @Injectable({ providedIn: 'root' })
 export class PulsoService {
-  readonly estado = signal<Estado>(leer());
+  private sesion = inject(SesionService);
+  private listo = false;
+  private cargado: string | null = this.sesion.estudioId();
+  readonly estado = signal<Estado>(this.cargado ? leerCuenta(this.cargado) : vacio());
 
   constructor() {
+    if (this.cargado) this.listo = true;
+
     effect(() => {
-      localStorage.setItem(CLAVE, JSON.stringify(this.estado()));
+      const id = this.sesion.estudioId();
+      if (!id) {
+        this.listo = false;
+        this.cargado = null;
+        return;
+      }
+      if (this.cargado === id) {
+        this.listo = true;
+        return;
+      }
+      const estado = leerCuenta(id);
+      this.listo = false;
+      untracked(() => this.estado.set(estado));
+      this.cargado = id;
+      this.listo = true;
+    });
+
+    effect(() => {
+      const id = this.sesion.estudioId();
+      const estado = this.estado();
+      if (!id || !this.listo || this.cargado !== id || this.sesion.esCliente()) return;
+      localStorage.setItem(claveCuenta(id), JSON.stringify(estado));
     });
   }
 
-  reiniciar(): void {
-    localStorage.removeItem(CLAVE);
-    this.estado.set(leer());
-  }
-
-  agregarCliente(datos: Pick<Cliente, 'nombre' | 'telefono' | 'correo' | 'objetivo'>): string {
+  agregarCliente(datos: Pick<Cliente, 'nombre' | 'telefono' | 'correo' | 'objetivo' | 'modalidad'>): string {
     const cliente: Cliente = {
       id: uid(),
       nombre: datos.nombre.trim(),
@@ -199,6 +144,7 @@ export class PulsoService {
       estatura: '',
       mensualidad: 0,
       valoracionMensual: 0,
+      modalidad: modalidadDe(datos.modalidad),
     };
     this.estado.update((actual) => ({ ...actual, clientes: [cliente, ...actual.clientes] }));
     return cliente.id;
@@ -219,6 +165,33 @@ export class PulsoService {
       rutinas: actual.rutinas.filter((rutina) => rutina.clienteId !== id),
       tablas: actual.tablas.filter((tabla) => tabla.clienteId !== id),
       pagos: actual.pagos.filter((pago) => pago.clienteId !== id),
+      accesos: actual.accesos.filter((acceso) => acceso.clienteId !== id),
+    }));
+  }
+
+  async darAcceso(clienteId: string, correo: string, clave: string): Promise<string | null> {
+    const mail = correo.trim().toLowerCase();
+    if (!mail.includes('@') || mail.startsWith('@') || mail.endsWith('@')) return 'Escribe un correo válido.';
+    if (clave.length < 8) return 'La contraseña necesita al menos 8 caracteres.';
+    if (this.sesion.hayEntrenador(mail)) return 'Ese correo ya es de un entrenador. Usa otro.';
+    const actual = this.estado();
+    if (!actual.clientes.some((cliente) => cliente.id === clienteId)) return 'No encuentro ese cliente.';
+    if (actual.accesos.some((acceso) => acceso.correo === mail && acceso.clienteId !== clienteId)) {
+      return 'Ese correo ya lo usa otro cliente.';
+    }
+    const sal = uid();
+    const acceso: AccesoCliente = { clienteId, correo: mail, sal, hash: await hashClave(clave, sal) };
+    this.estado.update((estado) => ({
+      ...estado,
+      accesos: [...estado.accesos.filter((item) => item.clienteId !== clienteId), acceso],
+    }));
+    return null;
+  }
+
+  quitarAcceso(clienteId: string): void {
+    this.estado.update((estado) => ({
+      ...estado,
+      accesos: estado.accesos.filter((acceso) => acceso.clienteId !== clienteId),
     }));
   }
 
@@ -282,6 +255,7 @@ export class PulsoService {
         estatura: '',
         mensualidad: 0,
         valoracionMensual: 0,
+        modalidad: 'personalizado',
       };
       return {
         ...actual,
@@ -308,17 +282,19 @@ export class PulsoService {
     }));
   }
 
-  nuevaRutina(clienteId: string | null): void {
+  nuevaRutina(clienteId: string | null, nombre = '', precio = 0): string {
     const rutina: Rutina = {
       id: uid(),
       clienteId,
-      nombre: clienteId ? 'Rutina nueva' : 'Plantilla nueva',
+      nombre: nombre.trim() || (clienteId ? 'Rutina nueva' : 'Plantilla nueva'),
+      precio: Math.max(0, Math.round(Number(precio) || 0)),
       dias: [{ id: uid(), nombre: 'Día 1', ejercicios: [] }],
     };
     this.estado.update((actual) => ({ ...actual, rutinas: [...actual.rutinas, rutina] }));
+    return rutina.id;
   }
 
-  cambiarRutina(id: string, cambios: Partial<Pick<Rutina, 'nombre'>>): void {
+  cambiarRutina(id: string, cambios: Partial<Pick<Rutina, 'nombre' | 'precio'>>): void {
     this.estado.update((actual) => ({
       ...actual,
       rutinas: actual.rutinas.map((rutina) => (rutina.id === id ? { ...rutina, ...cambios } : rutina)),
@@ -356,7 +332,14 @@ export class PulsoService {
   }
 
   agregarEjercicio(rutinaId: string, diaId: string): void {
-    const ejercicio: Ejercicio = { id: uid(), nombre: 'Sentadilla', series: '3', reps: '10', descanso: '60s' };
+    const ejercicio: Ejercicio = {
+      id: uid(),
+      nombre: 'Sentadilla',
+      series: '3',
+      reps: '10',
+      descanso: '60s',
+      imagen: true,
+    };
     this.estado.update((actual) => ({
       ...actual,
       rutinas: actual.rutinas.map((rutina) => {
@@ -419,6 +402,7 @@ export class PulsoService {
         id: uid(),
         clienteId,
         nombre: origen.nombre,
+        precio: Number(origen.precio) || 0,
         dias: origen.dias.map((dia) => ({
           id: uid(),
           nombre: dia.nombre,

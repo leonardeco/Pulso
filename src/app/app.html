@@ -1,20 +1,33 @@
-<div class="app">
-  <header class="topbar">
-    <a class="marca" routerLink="/">
-      <img src="pulso-logo.jpg" alt="" width="36" height="36" />
-      Pulso
-    </a>
-    <p>Estudio del entrenador</p>
-  </header>
+<div class="app" [class.acceso]="!sesion.activa()" [class.cliente]="sesion.esCliente()">
+  @if (sesion.activa()) {
+    <header class="topbar">
+      <a class="marca" [routerLink]="sesion.esCliente() ? '/mi-plan' : '/'">
+        <img src="pulso-marca.png" alt="Pulso Entrenadores" />
+      </a>
+      <div class="top-acciones">
+        <div class="tema" role="group" aria-label="Apariencia">
+          <button type="button" [class.activo]="tema.tema() === 'claro'" (click)="tema.usar('claro')">Claro</button>
+          <button type="button" [class.activo]="tema.tema() === 'oscuro'" (click)="tema.usar('oscuro')">Oscuro</button>
+        </div>
+        <button type="button" class="texto salir" (click)="salir()">Salir</button>
+      </div>
+    </header>
+    @if (avisos.aviso(); as aviso) {
+      <p class="aviso-cita">{{ aviso.texto }}</p>
+    }
+  }
 
   <main>
     <router-outlet />
   </main>
 </div>
 
-<nav class="nav">
-  <a routerLink="/" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
-  <a routerLink="/agenda" routerLinkActive="activo">Agenda</a>
-  <a routerLink="/reserva" routerLinkActive="activo">Reservar</a>
-  <a routerLink="/clientes" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Clientes</a>
-</nav>
+@if (sesion.esEntrenador()) {
+  <nav class="nav">
+    <a routerLink="/" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
+    <a routerLink="/agenda" routerLinkActive="activo">Agenda</a>
+    <a routerLink="/rutinas" routerLinkActive="activo">Rutina</a>
+    <a routerLink="/reserva" routerLinkActive="activo">Reservar</a>
+    <a routerLink="/clientes" routerLinkActive="activo" [routerLinkActiveOptions]="{ exact: true }">Clientes</a>
+  </nav>
+}

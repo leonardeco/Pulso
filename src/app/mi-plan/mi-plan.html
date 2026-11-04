@@ -1,0 +1,102 @@
+<section class="pagina">
+  @if (!cliente()) {
+    <h1>No encuentro tu plan</h1>
+    <p class="bajada">Pídele a tu entrenador que revise el acceso.</p>
+  } @else {
+    <h1>{{ cliente()!.nombre }}</h1>
+    <p class="bajada">{{ cliente()!.objetivo || 'Tu entrenador todavía no anota un objetivo.' }}</p>
+    <p class="bajada">Esto lo armó tu entrenador. Desde aquí solo se consulta.</p>
+
+    <section class="bloque">
+      <h2>Citas de la semana</h2>
+      @if (citas().length === 0) {
+        <p class="vacio">No tienes citas en los próximos días.</p>
+      }
+      <ul class="lista">
+        @for (cita of citas(); track cita.id) {
+          <li class="fila estatica">
+            <b>{{ cita.hora }}</b>
+            <span>
+              <strong>{{ etiqueta(cita.fecha) }}</strong>
+              <small>{{ servicio(cita.servicioId)?.nombre || 'Sesión' }} · {{ cita.estado }}</small>
+            </span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="bloque">
+      <div class="fila-titulo">
+        <h2>Entreno</h2>
+        @if (rutinas().length) {
+          <button type="button" class="texto" (click)="pdfEntreno()">Exportar PDF</button>
+        }
+      </div>
+      @if (rutinas().length === 0) {
+        <p class="vacio">Todavía no tienes una rutina.</p>
+      }
+      @for (rutina of rutinas(); track rutina.id) {
+        <article class="tarjeta">
+          <h2>{{ rutina.nombre }}</h2>
+          @for (dia of rutina.dias; track dia.id) {
+            <div class="dia-rutina">
+              <strong>{{ dia.nombre }}</strong>
+              @for (ejercicio of dia.ejercicios; track ejercicio.id) {
+                <div class="ejercicio">
+                  @if (llevaImagen(ejercicio)) {
+                    <img class="foto-ejercicio" [src]="foto(ejercicio.nombre)" [alt]="ejercicio.nombre" />
+                  }
+                  <strong>{{ ejercicio.nombre }}</strong>
+                  <div class="metas">
+                    <div>
+                      <span>Series</span>
+                      <strong>{{ ejercicio.series || '—' }}</strong>
+                    </div>
+                    <div>
+                      <span>Reps</span>
+                      <strong>{{ ejercicio.reps || '—' }}</strong>
+                    </div>
+                    <div>
+                      <span>Descanso</span>
+                      <strong>{{ ejercicio.descanso || '—' }}</strong>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </article>
+      }
+    </section>
+
+    <section class="bloque">
+      <div class="fila-titulo">
+        <h2>Alimentación</h2>
+        @if (tablas().length) {
+          <button type="button" class="texto" (click)="pdfComidas()">Exportar PDF</button>
+        }
+      </div>
+      <p class="bajada">Guía de tu entrenador. No reemplaza una valoración médica.</p>
+      @if (tablas().length === 0) {
+        <p class="vacio">Todavía no tienes tabla de comidas.</p>
+      }
+      @for (tabla of tablas(); track tabla.id) {
+        <article class="tarjeta">
+          <h2>{{ tabla.nombre }}</h2>
+          @for (fila of tabla.filas; track fila.id) {
+            <div class="comida">
+              <strong>{{ fila.momento }}</strong>
+              <p>{{ fila.alimento }}</p>
+              @if (fila.cantidad) {
+                <small>{{ fila.cantidad }}</small>
+              }
+              @if (fila.nota) {
+                <small>{{ fila.nota }}</small>
+              }
+            </div>
+          }
+        </article>
+      }
+    </section>
+  }
+</section>

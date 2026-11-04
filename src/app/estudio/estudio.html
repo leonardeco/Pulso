@@ -1,0 +1,68 @@
+<section class="pagina">
+  <a class="texto" routerLink="/">Volver</a>
+  <h1>Estudio</h1>
+  <p class="bajada">Entrenadores de este navegador, con las rutinas que crearon y el precio de cada una.</p>
+
+  <div class="resumen">
+    <article>
+      <span>Entrenadores</span>
+      <strong>{{ entrenadores() }}</strong>
+    </article>
+    <article>
+      <span>Rutinas</span>
+      <strong>{{ rutinas() }}</strong>
+    </article>
+    <article>
+      <span>Precios</span>
+      <strong>{{ pesos(precios()) }}</strong>
+    </article>
+  </div>
+
+  <div class="resumen">
+    <article>
+      <span>Personalizado</span>
+      <strong>{{ clientes('personalizado') }}</strong>
+    </article>
+    <article>
+      <span>Semi</span>
+      <strong>{{ clientes('semipersonalizado') }}</strong>
+    </article>
+    <article>
+      <span>Virtual</span>
+      <strong>{{ clientes('virtual') }}</strong>
+    </article>
+  </div>
+
+  @if (lista().length === 0) {
+    <p class="vacio">Todavía no hay entrenadores registrados aquí.</p>
+  }
+
+  @for (entrenador of lista(); track entrenador.id) {
+    <article class="tarjeta">
+      <strong>{{ entrenador.nombre }}</strong>
+      <p class="bajada">{{ entrenador.correo }}</p>
+      <p class="bajada">
+        {{ entrenador.rutinas.length }}
+        {{ entrenador.rutinas.length === 1 ? 'rutina' : 'rutinas' }}
+        · {{ pesos(entrenador.total) }}
+        · {{ entrenador.personalizados }} personalizado{{ entrenador.personalizados === 1 ? '' : 's' }}
+        · {{ entrenador.semipersonalizados }} semi
+        · {{ entrenador.virtuales }} virtual{{ entrenador.virtuales === 1 ? '' : 'es' }}
+      </p>
+      @if (entrenador.rutinas.length === 0) {
+        <p class="vacio">Sin rutinas.</p>
+      }
+      <ul class="lista">
+        @for (rutina of entrenador.rutinas; track rutina.id) {
+          <li class="fila estatica">
+            <span>
+              <strong>{{ rutina.nombre }}</strong>
+              <small>{{ rutina.cliente }} · {{ rutina.modalidad }}</small>
+            </span>
+            <b>{{ pesos(rutina.precio) }}</b>
+          </li>
+        }
+      </ul>
+    </article>
+  }
+</section>

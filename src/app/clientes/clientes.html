@@ -24,6 +24,14 @@
         Objetivo
         <input [(ngModel)]="objetivo" name="objetivo" />
       </label>
+      <label>
+        Acompañamiento
+        <select [(ngModel)]="modalidad" name="modalidad">
+          @for (item of modalidades; track item.id) {
+            <option [value]="item.id">{{ item.nombre }}</option>
+          }
+        </select>
+      </label>
       @if (error()) {
         <p class="error">{{ error() }}</p>
       }
@@ -46,7 +54,7 @@
           <span class="avatar">{{ iniciales(cliente.nombre) }}</span>
           <span>
             <strong>{{ cliente.nombre }}</strong>
-            <small>{{ cliente.objetivo || cliente.telefono }}</small>
+            <small>{{ nombreModalidad(cliente.modalidad) }} · {{ cliente.objetivo || cliente.telefono }}</small>
           </span>
         </a>
       </li>

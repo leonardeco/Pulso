@@ -1,5 +1,8 @@
 <section class="pagina">
   <h1>Hoy</h1>
+  @if (sesion.esAdmin()) {
+    <a class="texto" routerLink="/estudio">Ver el estudio</a>
+  }
   <p class="bajada">
     {{ etiqueta(hoy) }}.
     @if (citasHoy().length === 0) {
@@ -25,6 +28,43 @@
     </article>
   </div>
 
+  <div class="resumen">
+    <article>
+      <span>Personalizado</span>
+      <strong>{{ porModalidad('personalizado') }}</strong>
+    </article>
+    <article>
+      <span>Semi</span>
+      <strong>{{ porModalidad('semipersonalizado') }}</strong>
+    </article>
+    <article>
+      <span>Virtual</span>
+      <strong>{{ porModalidad('virtual') }}</strong>
+    </article>
+  </div>
+
+  <div class="resumen">
+    <article>
+      <span>Rutinas</span>
+      <strong>{{ rutinas().length }}</strong>
+    </article>
+    <article>
+      <span>Precios</span>
+      <strong>{{ pesos(totalRutinas()) }}</strong>
+    </article>
+    <article>
+      <span>Personal hoy</span>
+      <strong>{{ personalizadosHoy().length }}</strong>
+    </article>
+  </div>
+
+  @if (avisos.permiso() === 'default') {
+    <button type="button" class="secundario" (click)="avisos.activar()">Activar avisos</button>
+    <p class="bajada">El aviso de un personalizado sale 10 minutos antes, con la app abierta.</p>
+  } @else if (avisos.permiso() === 'denied') {
+    <p class="bajada">El navegador bloqueó las notificaciones. El aviso igual aparece dentro de la app.</p>
+  }
+
   <section class="bloque">
     <div class="fila-titulo">
       <h2>Agenda de hoy</h2>
@@ -40,7 +80,7 @@
             <b>{{ cita.hora }}</b>
             <span>
               <strong>{{ cliente(cita.clienteId)?.nombre || 'Cliente' }}</strong>
-              <small>{{ servicio(cita.servicioId)?.nombre || 'Sesión' }} · {{ cita.estado }}</small>
+              <small>{{ nombreModalidad(cliente(cita.clienteId)?.modalidad) }} · {{ servicio(cita.servicioId)?.nombre || 'Sesión' }} · {{ cita.estado }}</small>
             </span>
           </a>
         </li>
@@ -49,7 +89,8 @@
   </section>
 
   <div class="acciones">
-    <a class="primario" routerLink="/reserva">Nueva reserva</a>
+    <a class="primario" routerLink="/rutinas">Nueva rutina</a>
+    <a class="secundario" routerLink="/reserva">Nueva reserva</a>
     <a class="secundario" routerLink="/clientes">Ver clientes</a>
   </div>
 
@@ -58,6 +99,9 @@
       <h2>Servicios</h2>
       <button type="button" class="texto" (click)="nuevoServicio()">Agregar</button>
     </div>
+    @if (pulso.estado().servicios.length === 0) {
+      <p class="vacio">Todavía no hay servicios.</p>
+    }
     @for (servicio of pulso.estado().servicios; track servicio.id) {
       <div class="rejilla-servicio">
         <label>
@@ -76,6 +120,4 @@
       </div>
     }
   </section>
-
-  <button type="button" class="peligro-suave" (click)="reiniciar()">Volver a los datos de ejemplo</button>
 </section>

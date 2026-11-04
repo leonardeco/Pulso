@@ -38,6 +38,12 @@ testem.log
 /typings
 __screenshots__/
 
+# Secretos locales
+.env
+.env.*
+!.env.example
+.vercel
+
 # System files
 .DS_Store
 Thumbs.db

@@ -5,6 +5,23 @@ export interface Servicio {
   precio: number;
 }
 
+export type Modalidad = 'personalizado' | 'semipersonalizado' | 'virtual';
+
+export const MODALIDADES: { id: Modalidad; nombre: string }[] = [
+  { id: 'personalizado', nombre: 'Personalizado' },
+  { id: 'semipersonalizado', nombre: 'Semipersonalizado' },
+  { id: 'virtual', nombre: 'Virtual' },
+];
+
+export function modalidadDe(valor: string | undefined): Modalidad {
+  if (valor === 'semipersonalizado' || valor === 'virtual' || valor === 'personalizado') return valor;
+  return 'personalizado';
+}
+
+export function nombreModalidad(valor: string | undefined): string {
+  return MODALIDADES.find((item) => item.id === modalidadDe(valor))?.nombre ?? 'Personalizado';
+}
+
 export interface Cliente {
   id: string;
   nombre: string;
@@ -16,6 +33,14 @@ export interface Cliente {
   estatura: string;
   mensualidad: number;
   valoracionMensual: number;
+  modalidad: Modalidad;
+}
+
+export interface AccesoCliente {
+  clienteId: string;
+  correo: string;
+  sal: string;
+  hash: string;
 }
 
 export interface Cita {
@@ -33,6 +58,7 @@ export interface Ejercicio {
   series: string;
   reps: string;
   descanso: string;
+  imagen?: boolean;
 }
 
 export interface DiaRutina {
@@ -45,6 +71,7 @@ export interface Rutina {
   id: string;
   clienteId: string | null;
   nombre: string;
+  precio: number;
   dias: DiaRutina[];
 }
 
@@ -82,6 +109,7 @@ export interface Estado {
   rutinas: Rutina[];
   tablas: Tabla[];
   pagos: Pago[];
+  accesos: AccesoCliente[];
 }
 
 export const DIAS = [
@@ -122,6 +150,48 @@ export const EJERCICIOS = [
   'Bicicleta',
   'Movilidad de cadera',
 ];
+
+const FOTOS_EJERCICIO: Record<string, string> = {
+  sentadilla: 'ejercicios/sentadilla.jpg',
+  'sentadilla goblet': 'ejercicios/sentadilla-goblet.jpg',
+  'sentadilla bulgara': 'ejercicios/sentadilla-bulgara.jpg',
+  'peso muerto': 'ejercicios/peso-muerto.jpg',
+  'peso muerto rumano': 'ejercicios/peso-muerto-rumano.jpg',
+  'hip thrust': 'ejercicios/hip-thrust.jpg',
+  'puente de gluteo': 'ejercicios/puente-gluteo.jpg',
+  zancada: 'ejercicios/zancada.jpg',
+  prensa: 'ejercicios/prensa.jpg',
+  'elevacion de talones': 'ejercicios/elevacion-talones.jpg',
+  'press banca': 'ejercicios/press-banca.jpg',
+  'press militar': 'ejercicios/press-militar.jpg',
+  'remo con barra': 'ejercicios/remo-barra.jpg',
+  'remo en polea': 'ejercicios/remo-polea.jpg',
+  'jalon al pecho': 'ejercicios/jalon-pecho.jpg',
+  dominadas: 'ejercicios/dominadas.jpg',
+  fondos: 'ejercicios/fondos.jpg',
+  flexiones: 'ejercicios/flexiones.jpg',
+  'curl de biceps': 'ejercicios/curl-biceps.jpg',
+  'extension de triceps': 'ejercicios/extension-triceps.jpg',
+  'face pull': 'ejercicios/face-pull.jpg',
+  plancha: 'ejercicios/plancha.jpg',
+  pallof: 'ejercicios/pallof.jpg',
+  'caminata inclinada': 'ejercicios/caminata.jpg',
+  bicicleta: 'ejercicios/bicicleta.jpg',
+  'movilidad de cadera': 'ejercicios/movilidad-cadera.jpg',
+};
+
+export function imagenEjercicio(nombre: string): string {
+  const clave = nombre
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return FOTOS_EJERCICIO[clave] ?? '';
+}
+
+export function llevaImagen(ejercicio: { nombre: string; imagen?: boolean }): boolean {
+  return ejercicio.imagen !== false && imagenEjercicio(ejercicio.nombre) !== '';
+}
 
 export const MOMENTOS = [
   'Desayuno',

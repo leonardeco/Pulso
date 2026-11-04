@@ -4,10 +4,10 @@
     <a class="primario" routerLink="/clientes">Volver a clientes</a>
   </section>
 } @else {
-  <section class="pagina">
+  <section class="pagina" [class.con-espacio]="claveAbierta()">
     <a class="texto" routerLink="/clientes">Volver</a>
     <h1>{{ cliente()!.nombre }}</h1>
-    <p class="bajada">{{ cliente()!.objetivo || 'Sin objetivo anotado' }}</p>
+    <p class="bajada">{{ nombreModalidad(cliente()!.modalidad) }} · {{ cliente()!.objetivo || 'Sin objetivo anotado' }}</p>
 
     <div class="pestanas">
       <button type="button" [class.activa]="pestana === 'datos'" (click)="pestana = 'datos'">Datos</button>
@@ -33,6 +33,14 @@
         Objetivo
         <input [value]="cliente()!.objetivo" (change)="campo('objetivo', $event)" />
       </label>
+      <label>
+        Acompañamiento
+        <select [ngModel]="cliente()!.modalidad" name="modalidad" (ngModelChange)="modalidad($event)">
+          @for (item of modalidades; track item.id) {
+            <option [value]="item.id">{{ item.nombre }}</option>
+          }
+        </select>
+      </label>
       <div class="par">
         <label>
           Peso (kg)
@@ -47,6 +55,59 @@
         Notas
         <textarea rows="4" [value]="cliente()!.notas" (change)="campo('notas', $event)"></textarea>
       </label>
+
+      <section class="bloque">
+        <h2>Acceso del cliente</h2>
+        <p class="bajada">
+          Con este correo y esta contraseña entra a ver su entreno y su alimentación. No puede cambiar nada.
+          El acceso queda en este navegador.
+        </p>
+        @if (acceso()) {
+          <p>Ya entra con <strong>{{ acceso()!.correo }}</strong>.</p>
+        }
+        <label>
+          Correo de ingreso
+          <input name="accesoCorreo" type="email" [(ngModel)]="accesoCorreo" autocomplete="off" />
+        </label>
+        <label [class.clave-foco]="foco() === 'accesoClave'">
+          Contraseña
+          <span class="clave">
+            <input name="accesoClave" [type]="verClave() ? 'text' : 'password'" [(ngModel)]="accesoClave" autocomplete="new-password" placeholder="Mínimo 8 caracteres" (focus)="abrirClave($event)" (click)="abrirClave($event)" (blur)="cerrarClave()" />
+            <button type="button" class="ojo" (click)="verClave.set(!verClave())" [attr.aria-pressed]="verClave()" [attr.aria-label]="verClave() ? 'Ocultar contraseña' : 'Ver contraseña'">
+              @if (verClave()) {
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 6.2A11 11 0 0 1 12 6c6.2 0 10 6 10 6a18 18 0 0 1-3.1 3.7M6.2 6.8C3.7 8.5 2 12 2 12s3.8 6 10 6c1.5 0 2.9-.4 4.1-1" /></svg>
+              } @else {
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+              }
+            </button>
+          </span>
+        </label>
+        <label [class.clave-foco]="foco() === 'accesoConfirma'">
+          Confirmar contraseña
+          <span class="clave">
+            <input name="accesoConfirma" [type]="verConfirma() ? 'text' : 'password'" [(ngModel)]="accesoConfirma" autocomplete="new-password" placeholder="Vuelve a escribirla" (focus)="abrirClave($event)" (click)="abrirClave($event)" (blur)="cerrarClave()" />
+            <button type="button" class="ojo" (click)="verConfirma.set(!verConfirma())" [attr.aria-pressed]="verConfirma()" [attr.aria-label]="verConfirma() ? 'Ocultar confirmación' : 'Ver confirmación'">
+              @if (verConfirma()) {
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 6.2A11 11 0 0 1 12 6c6.2 0 10 6 10 6a18 18 0 0 1-3.1 3.7M6.2 6.8C3.7 8.5 2 12 2 12s3.8 6 10 6c1.5 0 2.9-.4 4.1-1" /></svg>
+              } @else {
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+              }
+            </button>
+          </span>
+        </label>
+        @if (errorAcceso()) {
+          <p class="error">{{ errorAcceso() }}</p>
+        }
+        @if (avisoAcceso()) {
+          <p class="pagado">{{ avisoAcceso() }}</p>
+        }
+        <button type="button" class="primario" (click)="guardarAcceso()">
+          {{ acceso() ? 'Actualizar acceso' : 'Crear acceso' }}
+        </button>
+        @if (acceso()) {
+          <button type="button" class="peligro-suave" (click)="quitarAcceso()">Quitar acceso</button>
+        }
+      </section>
 
       <h2>Próximas citas</h2>
       @if (citas().length === 0) {
@@ -69,7 +130,7 @@
     @if (pestana === 'rutina') {
       <div class="fila-titulo">
         <h2>Rutinas</h2>
-        <button type="button" class="texto" (click)="pulso.nuevaRutina(cliente()!.id)">Nueva</button>
+        <a class="texto" routerLink="/rutinas">Crear en Rutina</a>
       </div>
       @if (plantillas().length > 0) {
         <label>
@@ -91,6 +152,10 @@
             Nombre de la rutina
             <input [value]="rutina.nombre" (change)="pulso.cambiarRutina(rutina.id, { nombre: texto($event) })" />
           </label>
+          <label>
+            Precio
+            <input inputmode="numeric" [value]="rutina.precio || 0" (change)="pulso.cambiarRutina(rutina.id, { precio: numero($event) })" />
+          </label>
           @for (dia of rutina.dias; track dia.id) {
             <div class="dia-rutina">
               <label>
@@ -98,15 +163,27 @@
                 <input [value]="dia.nombre" (change)="pulso.cambiarDia(rutina.id, dia.id, texto($event))" />
               </label>
               @for (ejercicio of dia.ejercicios; track ejercicio.id) {
-                <div class="ejercicio">
-                  <label>
-                    Ejercicio
-                    <input
-                      list="ejercicios"
-                      [value]="ejercicio.nombre"
-                      (change)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { nombre: texto($event) })"
-                    />
-                  </label>
+              <div class="ejercicio">
+                @if (foto(ejercicio.nombre); as src) {
+                  @if (ejercicio.imagen !== false) {
+                    <img class="foto-ejercicio" [src]="src" [alt]="ejercicio.nombre" />
+                  }
+                  <button
+                    type="button"
+                    class="texto"
+                    (click)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { imagen: ejercicio.imagen === false })"
+                  >
+                    {{ ejercicio.imagen === false ? 'Poner imagen' : 'Quitar imagen' }}
+                  </button>
+                }
+                <label>
+                  Ejercicio
+                  <input
+                    list="ejercicios"
+                    [value]="ejercicio.nombre"
+                    (input)="pulso.cambiarEjercicio(rutina.id, dia.id, ejercicio.id, { nombre: texto($event) })"
+                  />
+                </label>
                   <div class="tres">
                     <label>
                       Series
@@ -146,6 +223,7 @@
           <div class="botones">
             <button type="button" class="secundario" (click)="pulso.agregarDia(rutina.id)">Agregar día</button>
             <button type="button" class="texto" (click)="pulso.copiarRutina(rutina.id, null)">Guardar como plantilla</button>
+            <button type="button" class="texto" (click)="pdfRutina(rutina)">Exportar PDF</button>
             <button type="button" class="texto peligro" (click)="pulso.eliminarRutina(rutina.id)">Borrar rutina</button>
           </div>
         </article>
@@ -199,6 +277,7 @@
           }
           <div class="botones">
             <button type="button" class="secundario" (click)="pulso.agregarFila(tabla.id)">Agregar comida</button>
+            <button type="button" class="texto" (click)="pdfTabla(tabla)">Exportar PDF</button>
             <button type="button" class="texto peligro" (click)="pulso.eliminarTabla(tabla.id)">Borrar tabla</button>
           </div>
         </article>
