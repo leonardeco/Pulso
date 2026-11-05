@@ -1,0 +1,89 @@
+@let r = rutina();
+<label>
+  Nombre de la rutina
+  <input [value]="r.nombre" (change)="pulso.cambiarRutina(r.id, { nombre: texto($event) })" />
+</label>
+<label>
+  Precio
+  <input inputmode="numeric" [value]="r.precio || 0" (change)="pulso.cambiarRutina(r.id, { precio: numero($event) })" />
+</label>
+@if (enlaceFicha() && r.clienteId) {
+  <a class="texto" [routerLink]="['/clientes', r.clienteId]">Ver ficha del cliente</a>
+}
+@for (dia of r.dias; track dia.id) {
+  <div class="dia-rutina">
+    <label>
+      Día
+      <input [value]="dia.nombre" (change)="pulso.cambiarDia(r.id, dia.id, texto($event))" />
+    </label>
+    @for (ejercicio of dia.ejercicios; track ejercicio.id) {
+      <div class="ejercicio">
+        @if (foto(ejercicio.nombre); as src) {
+          @if (ejercicio.imagen !== false) {
+            <img class="foto-ejercicio" [src]="src" [alt]="ejercicio.nombre" />
+          }
+          <button
+            type="button"
+            class="texto"
+            (click)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { imagen: ejercicio.imagen === false })"
+          >
+            {{ ejercicio.imagen === false ? 'Poner imagen' : 'Quitar imagen' }}
+          </button>
+        }
+        <label>
+          Ejercicio
+          <input
+            [attr.list]="idLista()"
+            [value]="ejercicio.nombre"
+            (input)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { nombre: texto($event) })"
+          />
+        </label>
+        <div class="tres">
+          <label>
+            Series
+            <input
+              [value]="ejercicio.series"
+              (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { series: texto($event) })"
+            />
+          </label>
+          <label>
+            Reps
+            <input
+              [value]="ejercicio.reps"
+              (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { reps: texto($event) })"
+            />
+          </label>
+          <label>
+            Descanso
+            <input
+              [value]="ejercicio.descanso"
+              (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { descanso: texto($event) })"
+            />
+          </label>
+        </div>
+        <button type="button" class="texto peligro" (click)="pulso.quitarEjercicio(r.id, dia.id, ejercicio.id)">
+          Quitar ejercicio
+        </button>
+      </div>
+    }
+    <div class="botones">
+      <button type="button" class="secundario" (click)="pulso.agregarEjercicio(r.id, dia.id)">
+        Agregar ejercicio
+      </button>
+      <button type="button" class="texto" (click)="pulso.quitarDia(r.id, dia.id)">Quitar día</button>
+    </div>
+  </div>
+}
+<div class="botones">
+  <button type="button" class="secundario" (click)="pulso.agregarDia(r.id)">Agregar día</button>
+  @if (r.clienteId) {
+    <button type="button" class="texto" (click)="pulso.copiarRutina(r.id, null)">Guardar como plantilla</button>
+  }
+  <button type="button" class="texto" (click)="pdf()">Exportar PDF</button>
+  <button type="button" class="texto peligro" (click)="pulso.eliminarRutina(r.id)">Borrar rutina</button>
+</div>
+<datalist [id]="idLista()">
+  @for (nombre of ejercicios; track nombre) {
+    <option [value]="nombre"></option>
+  }
+</datalist>
