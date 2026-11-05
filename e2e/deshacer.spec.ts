@@ -51,7 +51,7 @@ type EstadoServidor = {
   clientes: { nombre: string }[];
   rutinas: {
     nombre: string;
-    dias: { nombre: string; ejercicios: { nombre: string }[] }[];
+    dias: { nombre: string; ejercicios: { nombre: string; series?: string }[] }[];
   }[];
 };
 
@@ -171,6 +171,8 @@ test('pasados 10 segundos la fila de lo quitado desaparece y ya no se puede desh
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Dominadas/);
 
+  // El cursor encima de la fila pausa el plazo; se aparta para que corra.
+  await page.mouse.move(1, 1);
   await page.clock.fastForward(9000);
   await expect(fila).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Deshacer: Dominadas' })).toBeVisible();
@@ -180,6 +182,109 @@ test('pasados 10 segundos la fila de lo quitado desaparece y ya no se puede desh
   await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
   await expect(editor.locator('.ejercicio')).toHaveCount(1);
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Fondos']);
+  await ctx.close();
+});
+
+test('con el cursor sobre la fila el plazo no vence y al salir la fila desaparece tras el tiempo restante', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await page.clock.install();
+  await registrar(page, correo('de8'));
+  const editor = await crearRutina(page, ctx, 'Rutina con pausa');
+  await ponerEjercicios(editor, ['Remo con mancuerna', 'Elevaciones laterales']);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Remo con mancuerna', 'Elevaciones laterales']);
+
+  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const fila = editor.locator('.fila-quitado');
+  await expect(fila).toHaveText(/Quitado · Remo con mancuerna/);
+
+  await fila.hover();
+  await page.clock.fastForward(15000);
+  await expect(fila).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Deshacer: Remo con mancuerna' })).toBeVisible();
+
+  await page.mouse.move(1, 1);
+  await page.clock.fastForward(4000);
+  await expect(fila).toBeVisible();
+
+  await page.clock.fastForward(7000);
+  await expect(fila).toHaveCount(0);
+  await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Elevaciones laterales']);
+  await ctx.close();
+});
+
+test('quitar con el teclado deja el foco en Deshacer y quitar con clic no lo mueve', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('de9'));
+  const editor = await crearRutina(page, ctx, 'Rutina con foco');
+  await ponerEjercicios(editor, ['Prensa', 'Extensiones', 'Curl femoral']);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Prensa', 'Extensiones', 'Curl femoral']);
+
+  const fila = editor.locator('.fila-quitado');
+  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).press('Enter');
+  await expect(fila).toHaveText(/Quitado · Prensa/);
+  await expect(editor.getByRole('button', { name: 'Deshacer: Prensa' })).toBeFocused();
+
+  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  await expect(fila).toHaveText(/Quitado · Extensiones/);
+  // Se espera a que la pantalla termine de pintar para comprobar que el foco no se movió.
+  await page.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
+  await expect(editor.getByRole('button', { name: 'Deshacer: Extensiones' })).not.toBeFocused();
+  await expect(editor.locator('.fila-quitado button:focus')).toHaveCount(0);
+  await ctx.close();
+});
+
+test('tras Deshacer con el teclado el foco queda dentro del ejercicio devuelto', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('de10'));
+  const editor = await crearRutina(page, ctx, 'Rutina con foco devuelto');
+  await ponerEjercicios(editor, ['Press inclinado', 'Aperturas', 'Fondos en paralelas']);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Press inclinado', 'Aperturas', 'Fondos en paralelas']);
+
+  const dia = editor.locator('.dia-rutina').first();
+  await dia.locator('.ejercicio').nth(1).getByRole('button', { name: 'Quitar ejercicio' }).press('Enter');
+  const deshacer = editor.getByRole('button', { name: 'Deshacer: Aperturas' });
+  await expect(deshacer).toBeFocused();
+  await deshacer.press('Enter');
+
+  await expect(editor.locator('.fila-quitado')).toHaveCount(0);
+  await expect(dia.locator('.ejercicio')).toHaveCount(3);
+  const devuelto = dia.locator('.ejercicio').nth(1);
+  await expect(devuelto.getByLabel('Ejercicio', { exact: true })).toHaveValue('Aperturas');
+  await expect(devuelto.locator(':focus')).toHaveCount(1);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Press inclinado', 'Aperturas', 'Fondos en paralelas']);
+  await ctx.close();
+});
+
+test('escribir en Series hace desaparecer la fila sin salir del campo y el servidor queda con lo esperado', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('de11'));
+  const editor = await crearRutina(page, ctx, 'Rutina con escritura');
+  await ponerEjercicios(editor, ['Hombro posterior', 'Face pull']);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Hombro posterior', 'Face pull']);
+
+  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const fila = editor.locator('.fila-quitado');
+  await expect(fila).toHaveText(/Quitado · Hombro posterior/);
+  await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Face pull']);
+
+  const series = editor.locator('.ejercicio').first().getByLabel('Series', { exact: true });
+  await series.fill('5');
+  await expect(series).toBeFocused();
+  await expect(fila).toHaveCount(0);
+  await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
+
+  await series.blur();
+  await expect
+    .poll(async () => {
+      const [rutina] = (await estadoEnServidor(ctx)).rutinas;
+      return rutina?.dias[0]?.ejercicios.map((e) => [e.nombre, e.series]);
+    })
+    .toEqual([['Face pull', '5']]);
   await ctx.close();
 });
 
