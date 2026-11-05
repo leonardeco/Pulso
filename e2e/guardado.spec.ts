@@ -151,3 +151,46 @@ test('con un corte de red al guardar el indicador no dice Guardado y sale el avi
   await expect(indicador).toContainText('Cambios sin guardar');
   await ctx.close();
 });
+
+test('con un conflicto de versión el indicador no dice Guardado y sale el aviso de conflicto', async ({ browser }) => {
+  const { ctx, page, editor, indicador } = await prepararRutina(browser, 'gu6');
+  const servidor = (await (await ctx.request.get('/api/estudio')).json()) as {
+    estado: { rutinas: { nombre: string }[] };
+    version: number;
+  };
+  const copia = {
+    ...servidor,
+    version: servidor.version + 1,
+    estado: {
+      ...servidor.estado,
+      rutinas: servidor.estado.rutinas.map((r) => ({ ...r, nombre: 'Rutina del otro dispositivo' })),
+    },
+  };
+  await page.route('**/api/estudio', (ruta) =>
+    ruta.request().method() === 'PUT'
+      ? ruta.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify(copia) })
+      : ruta.fallback(),
+  );
+
+  await cambiarNombre(editor, 'Rutina con conflicto');
+  await expect(page.locator('p.estado-sync.alerta', { hasText: 'Este estudio cambió en otro dispositivo' })).toBeVisible();
+  await expect(indicador).not.toHaveText(GUARDADO);
+  await expect(indicador).toContainText('Cambios sin guardar');
+  expect(await nombresDeRutinas(ctx)).not.toContain('Rutina con conflicto');
+  await ctx.close();
+});
+
+test('con la carga de datos fallando tras recargar el indicador no dice Guardado y sale el aviso de carga', async ({ browser }) => {
+  const { ctx, page, indicador } = await prepararRutina(browser, 'gu7');
+  await page.route(/\/api\/estudio(\?.*)?$/, (ruta) =>
+    ruta.request().method() === 'GET'
+      ? ruta.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Falla del servidor' }) })
+      : ruta.fallback(),
+  );
+
+  await page.reload();
+  await expect(page.getByText('No pude traer tus datos')).toBeVisible();
+  await expect(indicador).not.toHaveText(GUARDADO);
+  await expect(indicador).toContainText('Cambios sin guardar');
+  await ctx.close();
+});
