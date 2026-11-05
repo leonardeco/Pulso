@@ -3,22 +3,21 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
-import { EJERCICIOS, MODALIDADES, MOMENTOS, etiquetaPeriodo, hoyISO, imagenEjercicio, modalidadDe, nombreModalidad, periodoActual, pesos, type Rutina, type Tabla } from '../modelos';
+import { MODALIDADES, MOMENTOS, etiquetaPeriodo, hoyISO, modalidadDe, nombreModalidad, periodoActual, pesos, type Tabla } from '../modelos';
 import { PulsoService } from '../pulso.service';
 import { subirCampoClave } from '../clave-campo';
-import { abrirPdf, htmlRutinas, htmlTablas } from '../exportar';
+import { abrirPdf, htmlTablas } from '../exportar';
+import { EditorRutina } from '../editor-rutina/editor-rutina';
 
 @Component({
   selector: 'app-ficha',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, EditorRutina],
   templateUrl: './ficha.html',
 })
 export class Ficha {
   readonly pulso = inject(PulsoService);
-  readonly ejercicios = EJERCICIOS;
   readonly modalidades = MODALIDADES;
   readonly nombreModalidad = nombreModalidad;
-  readonly foto = imagenEjercicio;
   readonly claveAbierta = signal(false);
   readonly foco = signal('');
   readonly momentos = MOMENTOS;
@@ -73,10 +72,6 @@ export class Ficha {
 
   texto(evento: Event) {
     return (evento.target as HTMLInputElement).value;
-  }
-
-  numero(evento: Event) {
-    return Math.max(0, Math.round(Number(this.texto(evento)) || 0));
   }
 
   campo(campo: 'nombre' | 'telefono' | 'correo' | 'objetivo' | 'notas' | 'peso' | 'estatura', evento: Event) {
@@ -181,11 +176,6 @@ export class Ficha {
     if (!cliente) return;
     if (!confirm(`¿Quitar a ${cliente.nombre} y sus citas?`)) return;
     this.pulso.eliminarCliente(cliente.id);
-  }
-
-  pdfRutina(rutina: Rutina) {
-    const cliente = this.cliente()?.nombre || 'Cliente';
-    abrirPdf(rutina.nombre || 'Rutina', htmlRutinas(cliente, [rutina]));
   }
 
   pdfTabla(tabla: Tabla) {

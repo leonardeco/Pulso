@@ -1,19 +1,16 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { EJERCICIOS, imagenEjercicio, nombreModalidad, pesos, type Rutina } from '../modelos';
+import { nombreModalidad, pesos } from '../modelos';
 import { PulsoService } from '../pulso.service';
-import { abrirPdf, htmlRutinas } from '../exportar';
+import { EditorRutina } from '../editor-rutina/editor-rutina';
 
 @Component({
   selector: 'app-rutinas',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, EditorRutina],
   templateUrl: './rutinas.html',
 })
 export class Rutinas {
   readonly pulso = inject(PulsoService);
-  readonly ejercicios = EJERCICIOS;
-  readonly foto = imagenEjercicio;
   readonly pesos = pesos;
   readonly nombreModalidad = nombreModalidad;
   readonly error = signal('');
@@ -21,10 +18,6 @@ export class Rutinas {
   nombre = '';
   clienteId = '';
   precio = 0;
-
-  texto(evento: Event) {
-    return (evento.target as HTMLInputElement).value;
-  }
 
   nombreCliente(clienteId: string | null) {
     if (!clienteId) return 'Plantilla';
@@ -35,10 +28,6 @@ export class Rutinas {
     if (!clienteId) return 'Plantilla';
     const cliente = this.pulso.estado().clientes.find((item) => item.id === clienteId);
     return nombreModalidad(cliente?.modalidad);
-  }
-
-  numero(evento: Event) {
-    return Math.max(0, Math.round(Number(this.texto(evento)) || 0));
   }
 
   crear() {
@@ -57,10 +46,5 @@ export class Rutinas {
 
   alternar(id: string) {
     this.abierta.update((actual) => (actual === id ? null : id));
-  }
-
-  pdf(rutina: Rutina) {
-    const titulo = rutina.nombre || 'Rutina';
-    abrirPdf(titulo, htmlRutinas(this.nombreCliente(rutina.clienteId), [rutina]));
   }
 }
