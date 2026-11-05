@@ -1,4 +1,4 @@
-import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild, type OnInit } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { EJERCICIOS, imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
@@ -11,11 +11,12 @@ import { abrirPdf, htmlRutinas } from '../exportar';
   templateUrl: './editor-rutina.html',
   host: { style: 'display: contents', '(input)': 'pulso.olvidarQuitado()' },
 })
-export class EditorRutina {
+export class EditorRutina implements OnInit {
   readonly pulso = inject(PulsoService);
   readonly rutina = input.required<Rutina>();
   readonly enlaceFicha = input(false);
-  readonly duplicada = output<string>();
+  readonly anuncioInicial = input('');
+  readonly duplicada = output<{ id: string; texto: string }>();
   readonly ejercicios = EJERCICIOS;
   readonly foto = imagenEjercicio;
   readonly idLista = computed(() => `ejercicios-${this.rutina().id}`);
@@ -51,6 +52,11 @@ export class EditorRutina {
         afterNextRender(() => this.ancla()?.nativeElement.focus(), { injector: this.injector });
       }
     });
+  }
+
+  ngOnInit() {
+    const inicial = this.anuncioInicial();
+    if (inicial) this.anunciar(inicial);
   }
 
   quitar(evento: MouseEvent, accion: () => void) {
@@ -150,8 +156,9 @@ export class EditorRutina {
   duplicarRutina(rutina: Rutina) {
     const id = this.pulso.duplicarRutina(rutina.id);
     if (!id) return;
-    this.anunciar(`${rutina.nombre.trim() || 'Rutina sin nombre'} duplicada`);
-    this.duplicada.emit(id);
+    const texto = `${rutina.nombre.trim() || 'Rutina sin nombre'} duplicada`;
+    this.anunciar(texto);
+    this.duplicada.emit({ id, texto });
     this.enfocarCampo(id);
   }
 

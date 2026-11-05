@@ -16,6 +16,7 @@ export class Rutinas {
   readonly nombreModalidad = nombreModalidad;
   readonly error = signal('');
   readonly abierta = signal<string | null>(null);
+  readonly anuncioCopia = signal('');
   nombre = '';
   clienteId = '';
   precio = 0;
@@ -42,10 +43,13 @@ export class Rutinas {
     this.clienteId = '';
     this.precio = 0;
     this.error.set('');
+    this.anuncioCopia.set('');
     this.abierta.set(id);
   }
 
-  abrirCopia(id: string) {
+  abrirCopia(copia: { id: string; texto: string }) {
+    const id = copia.id;
+    this.anuncioCopia.set(copia.texto);
     this.abierta.set(id);
     afterNextRender(
       () => {
@@ -56,6 +60,7 @@ export class Rutinas {
   }
 
   alternar(id: string) {
+    this.anuncioCopia.set('');
     this.abierta.update((actual) => (actual === id ? null : id));
   }
 }
