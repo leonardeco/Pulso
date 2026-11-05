@@ -142,7 +142,12 @@ export class PulsoService {
         (this.firmaActual() !== this.firmaConfirmada() || this.temporizadorArmado()),
       enVuelo: this.enVuelo(),
       msEnVuelo: this.vueloLargo() ? MS_PARA_GUARDANDO : 0,
-      conError: this.errorGuardado() !== '' || this.sinConexion(),
+      conError:
+        this.errorGuardado() !== '' ||
+        this.sinConexion() ||
+        this.conflicto() ||
+        this.cargaFallida() ||
+        this.subidaPendiente(),
     }),
   );
   readonly cercaDelLimite = computed(() => cercaDelLimite(this.firmaActual().length, LIMITE_CARACTERES));

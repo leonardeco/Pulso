@@ -42,7 +42,7 @@
         }
       </p>
       @if (pulso.cercaDelLimite()) {
-        <p class="estado-sync alerta">Tu estudio está cerca del tamaño máximo. Quita rutinas o ejercicios que ya no uses.</p>
+        <p class="estado-sync alerta" role="status">Tu estudio está cerca del tamaño máximo. Quita rutinas o ejercicios que ya no uses.</p>
       }
     }
     @if (pulso.errorGuardado(); as motivo) {
