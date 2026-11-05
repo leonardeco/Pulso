@@ -21,6 +21,14 @@ import {
 import { Quitado, devolver, sacarDia, sacarEjercicio } from './deshacer';
 import { LIMITE_CARACTERES, cercaDelLimite, estadoDeGuardado, MS_PARA_GUARDANDO } from './guardado';
 import { SesionService } from './sesion.service';
+import {
+  ResultadoOrden,
+  duplicarDia,
+  duplicarEjercicio,
+  duplicarRutina,
+  moverEjercicio,
+  moverEjercicioADia,
+} from './orden';
 
 const REINTENTO_MS = 15000;
 const ESPERA_MS = 600;
@@ -810,8 +818,9 @@ export class PulsoService {
     this.estado.update((actual) => ({ ...actual, rutinas: actual.rutinas.filter((item) => item.id !== id) }));
   }
 
-  copiarRutina(id: string, clienteId: string | null): void {
+  copiarRutina(id: string, clienteId: string | null): string | null {
     this.limpiarQuitado();
+    let creada: string | null = null;
     this.estado.update((actual) => {
       const origen = actual.rutinas.find((item) => item.id === id);
       if (!origen) return actual;
@@ -826,8 +835,58 @@ export class PulsoService {
           ejercicios: dia.ejercicios.map((item) => ({ ...item, id: uid() })),
         })),
       };
+      creada = copia.id;
       return { ...actual, rutinas: [...actual.rutinas, copia] };
     });
+    return creada;
+  }
+
+  private aplicarOrden(resultado: ResultadoOrden | null): ResultadoOrden | null {
+    if (!resultado) return null;
+    this.estado.update((actual) => ({ ...actual, rutinas: resultado.rutinas }));
+    return resultado;
+  }
+
+  duplicarEjercicio(rutinaId: string, diaId: string, ejercicioId: string): string | null {
+    this.limpiarQuitado();
+    const resultado = this.aplicarOrden(duplicarEjercicio(this.estado().rutinas, rutinaId, diaId, ejercicioId, uid));
+    return resultado?.id ?? null;
+  }
+
+  duplicarDia(rutinaId: string, diaId: string): string | null {
+    this.limpiarQuitado();
+    const resultado = this.aplicarOrden(duplicarDia(this.estado().rutinas, rutinaId, diaId, uid));
+    return resultado?.id ?? null;
+  }
+
+  duplicarRutina(rutinaId: string): string | null {
+    this.limpiarQuitado();
+    const resultado = this.aplicarOrden(duplicarRutina(this.estado().rutinas, rutinaId, uid));
+    return resultado?.id ?? null;
+  }
+
+  moverEjercicio(
+    rutinaId: string,
+    diaId: string,
+    ejercicioId: string,
+    delta: -1 | 1,
+  ): { posicion: number; total: number } | null {
+    this.limpiarQuitado();
+    const resultado = this.aplicarOrden(moverEjercicio(this.estado().rutinas, rutinaId, diaId, ejercicioId, delta));
+    return resultado ? { posicion: resultado.posicion ?? 0, total: resultado.total ?? 0 } : null;
+  }
+
+  moverEjercicioADia(
+    rutinaId: string,
+    diaId: string,
+    ejercicioId: string,
+    diaDestinoId: string,
+  ): { posicion: number; total: number } | null {
+    this.limpiarQuitado();
+    const resultado = this.aplicarOrden(
+      moverEjercicioADia(this.estado().rutinas, rutinaId, diaId, ejercicioId, diaDestinoId),
+    );
+    return resultado ? { posicion: resultado.posicion ?? 0, total: resultado.total ?? 0 } : null;
   }
 
   nuevaTabla(clienteId: string): void {
