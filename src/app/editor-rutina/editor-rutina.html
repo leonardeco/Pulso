@@ -95,7 +95,7 @@
             />
           </label>
         </div>
-        <button type="button" class="texto peligro" (click)="pulso.quitarEjercicio(r.id, dia.id, ejercicio.id)">
+        <button type="button" class="texto peligro" (click)="quitar($event, () => pulso.quitarEjercicio(r.id, dia.id, ejercicio.id))">
           Quitar ejercicio
         </button>
       </div>
@@ -107,7 +107,7 @@
       <button type="button" class="secundario" (click)="pulso.agregarEjercicio(r.id, dia.id)">
         Agregar ejercicio
       </button>
-      <button type="button" class="texto" (click)="pulso.quitarDia(r.id, dia.id)">Quitar día</button>
+      <button type="button" class="texto" (click)="quitar($event, () => pulso.quitarDia(r.id, dia.id))">Quitar día</button>
     </div>
   </div>
 }

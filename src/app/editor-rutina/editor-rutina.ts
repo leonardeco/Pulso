@@ -24,13 +24,17 @@ export class EditorRutina {
   private readonly ancla = viewChild<ElementRef<HTMLElement>>('ancla');
   private hayFila = false;
   private devolviendo = false;
+  private quitadoConTeclado = false;
 
   constructor() {
     effect(() => {
       const hay = this.pulso.quitado() !== null;
       const habia = this.hayFila;
       this.hayFila = hay;
+      const conTeclado = this.quitadoConTeclado;
+      this.quitadoConTeclado = false;
       if (hay) {
+        if (!conTeclado) return;
         afterNextRender(
           () => {
             const activo = document.activeElement;
@@ -45,6 +49,11 @@ export class EditorRutina {
         afterNextRender(() => this.ancla()?.nativeElement.focus(), { injector: this.injector });
       }
     });
+  }
+
+  quitar(evento: MouseEvent, accion: () => void) {
+    this.quitadoConTeclado = evento.detail === 0;
+    accion();
   }
 
   deshacer() {
