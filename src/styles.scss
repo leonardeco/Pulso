@@ -155,6 +155,38 @@ p.estado-sync {
   color: var(--danger);
 }
 
+p.indicador-guardado {
+  margin: 0;
+  padding: 8px max(var(--borde), env(safe-area-inset-right)) 8px max(var(--borde), env(safe-area-inset-left));
+  color: var(--muted);
+  font-size: var(--texto);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.indicador-contenido {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  animation: indicador-aparece 160ms ease-out;
+}
+
+@keyframes indicador-aparece {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicador-contenido {
+    animation: none;
+  }
+}
+
 .estado-sync button {
   min-height: 44px;
 }

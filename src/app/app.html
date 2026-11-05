@@ -18,6 +18,33 @@
     @if (pulso.sinConexion()) {
       <p class="estado-sync alerta" role="status" aria-live="polite">Sin conexión. Reintentando… tus últimos cambios aún no se guardan.</p>
     }
+    @if (sesion.esEntrenador()) {
+      <p class="indicador-guardado" role="status" aria-live="polite">
+        @switch (pulso.estadoGuardado()) {
+          @case ('guardando') {
+            <span class="indicador-contenido">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="2"/></svg>
+              Guardando…
+            </span>
+          }
+          @case ('pendiente') {
+            <span class="indicador-contenido">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              Cambios sin guardar
+            </span>
+          }
+          @default {
+            <span class="indicador-contenido">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              Guardado
+            </span>
+          }
+        }
+      </p>
+      @if (pulso.cercaDelLimite()) {
+        <p class="estado-sync alerta">Tu estudio está cerca del tamaño máximo. Quita rutinas o ejercicios que ya no uses.</p>
+      }
+    }
     @if (pulso.errorGuardado(); as motivo) {
       <p class="estado-sync alerta" role="status" aria-live="polite">No pude guardar: {{ motivo }}</p>
     }
