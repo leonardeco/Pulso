@@ -915,3 +915,65 @@ textarea:focus {
     grid-row: auto;
   }
 }
+
+.fila-quitado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--ink);
+  font-size: var(--texto);
+  animation: aparece-quitado 200ms ease-out;
+}
+
+.fila-quitado .icono-quitado {
+  flex: none;
+  color: var(--muted);
+}
+
+.fila-quitado .texto-quitado {
+  flex: 1 1 8rem;
+  min-width: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.fila-quitado .deshacer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--texto);
+}
+
+.fila-quitado .deshacer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes aparece-quitado {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fila-quitado {
+    animation: none;
+    transition: none;
+  }
+}

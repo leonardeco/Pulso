@@ -174,7 +174,7 @@ export class Ficha {
   borrarCliente() {
     const cliente = this.cliente();
     if (!cliente) return;
-    if (!confirm(`¿Quitar a ${cliente.nombre} y sus citas?`)) return;
+    if (!confirm(`¿Quitar a ${cliente.nombre}? También se borran sus citas, rutinas, tablas, pagos y acceso.`)) return;
     this.pulso.eliminarCliente(cliente.id);
   }
 
