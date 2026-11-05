@@ -184,7 +184,7 @@ export function imagenEjercicio(nombre: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
-  return FOTOS_EJERCICIO[clave] ?? '';
+  return Object.hasOwn(FOTOS_EJERCICIO, clave) ? FOTOS_EJERCICIO[clave] : '';
 }
 
 export function llevaImagen(ejercicio: { nombre: string; imagen?: boolean }): boolean {

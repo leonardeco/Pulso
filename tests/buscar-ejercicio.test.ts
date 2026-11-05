@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EJERCICIOS, Rutina } from '../src/app/modelos';
+import { EJERCICIOS, imagenEjercicio, Rutina } from '../src/app/modelos';
 import { ALIAS, buscarEjercicios, normalizar, recientes } from '../src/app/buscar-ejercicio';
 
 const catalogoConEne = [...EJERCICIOS, 'Curl de muñeca'];
@@ -36,6 +36,10 @@ describe('normalizar', () => {
   it('trata la ñ como n', () => {
     expect(normalizar('Muñeca')).toBe('muneca');
   });
+
+  it('colapsa los espacios internos', () => {
+    expect(normalizar('Peso   muerto 	 rumano')).toBe('peso muerto rumano');
+  });
 });
 
 describe('alias', () => {
@@ -69,21 +73,61 @@ describe('recientes', () => {
 });
 
 describe('buscarEjercicios', () => {
-  it('sin consulta muestra primero los recientes y luego el catálogo sin repetir', () => {
+  it('sin consulta muestra primero los recientes y luego el catálogo completo sin repetir', () => {
     const { resultados, crear } = buscarEjercicios({
       consulta: '',
       recientes: ['Prensa', 'Curl de muñeca'],
       catalogo: catalogoConEne,
-      max: 5,
     });
-    expect(resultados).toEqual([
+    expect(resultados.slice(0, 4)).toEqual([
       { nombre: 'Prensa', origen: 'reciente' },
       { nombre: 'Curl de muñeca', origen: 'reciente' },
       { nombre: 'Sentadilla', origen: 'catalogo' },
       { nombre: 'Sentadilla goblet', origen: 'catalogo' },
-      { nombre: 'Sentadilla búlgara', origen: 'catalogo' },
     ]);
+    expect(resultados.map((r) => r.nombre)).toHaveLength(catalogoConEne.length);
+    expect(resultados.filter((r) => r.nombre === 'Prensa')).toHaveLength(1);
     expect(crear).toBeNull();
+  });
+
+  it('sin consulta muestra como máximo seis recientes y no tapa el catálogo', () => {
+    const previos = ['Uno', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho'];
+    const { resultados } = buscarEjercicios({ consulta: '', recientes: previos, catalogo: EJERCICIOS });
+    expect(resultados.filter((r) => r.origen === 'reciente').map((r) => r.nombre)).toEqual(previos.slice(0, 6));
+    expect(resultados.filter((r) => r.origen === 'catalogo')).toHaveLength(EJERCICIOS.length);
+    expect(resultados.map((r) => r.nombre)).not.toContain('Siete');
+  });
+
+  it('pone primero la coincidencia exacta aunque haya recientes que empiezan igual', () => {
+    const { resultados } = buscarEjercicios({
+      consulta: 'sentadilla',
+      recientes: ['Sentadilla goblet'],
+      catalogo: EJERCICIOS,
+    });
+    expect(resultados[0]).toEqual({ nombre: 'Sentadilla', origen: 'catalogo' });
+    expect(resultados[1]).toEqual({ nombre: 'Sentadilla goblet', origen: 'reciente' });
+  });
+
+  it('un espacio doble dentro de la consulta no ofrece crear si el nombre ya existe', () => {
+    const { resultados, crear } = buscarEjercicios({
+      consulta: 'peso   muerto',
+      recientes: [],
+      catalogo: EJERCICIOS,
+    });
+    expect(crear).toBeNull();
+    expect(resultados[0].nombre).toBe('Peso muerto');
+  });
+
+  it('guarda la consulta a proponer con los espacios colapsados', () => {
+    expect(buscarEjercicios({ consulta: '  Curl   martillo  ', recientes: [], catalogo: EJERCICIOS }).crear).toBe(
+      'Curl martillo',
+    );
+  });
+
+  it('recorta a 80 caracteres la consulta que se propone crear', () => {
+    const larga = 'a'.repeat(120);
+    const { crear } = buscarEjercicios({ consulta: larga, recientes: [], catalogo: EJERCICIOS });
+    expect(crear).toBe('a'.repeat(80));
   });
 
   it('encuentra con tildes aunque la consulta no las lleve', () => {
@@ -119,9 +163,9 @@ describe('buscarEjercicios', () => {
     expect(mezcla).toEqual(['Remo con barra', 'Press remo']);
   });
 
-  it('muestra los recientes antes que el catálogo y los marca como recientes', () => {
+  it('entre los que empiezan por la consulta muestra antes los recientes y los marca como recientes', () => {
     const { resultados } = buscarEjercicios({
-      consulta: 'sentadilla',
+      consulta: 'sentad',
       recientes: ['Sentadilla búlgara'],
       catalogo: EJERCICIOS,
     });
@@ -137,8 +181,8 @@ describe('buscarEjercicios', () => {
   });
 
   it('respeta el máximo de resultados', () => {
-    expect(nombres('', [], EJERCICIOS)).toHaveLength(8);
-    expect(nombres('', [], EJERCICIOS, 3)).toHaveLength(3);
+    expect(nombres('a', [], EJERCICIOS)).toHaveLength(8);
+    expect(nombres('a', [], EJERCICIOS, 3)).toHaveLength(3);
     expect(nombres('sentadilla', [], EJERCICIOS, 2)).toHaveLength(2);
   });
 
@@ -164,5 +208,17 @@ describe('buscarEjercicios', () => {
       resultados: [],
       crear: 'zzzz',
     });
+  });
+});
+
+describe('imagenEjercicio', () => {
+  it('no devuelve foto para nombres que coinciden con propiedades de los objetos', () => {
+    for (const nombre of ['constructor', '__proto__', 'toString', 'valueOf']) {
+      expect(imagenEjercicio(nombre)).toBe('');
+    }
+  });
+
+  it('devuelve la foto de un ejercicio del catálogo', () => {
+    expect(imagenEjercicio('Plancha')).toBe('ejercicios/plancha.jpg');
   });
 });

@@ -1,4 +1,4 @@
-<dialog #hoja class="selector" aria-labelledby="titulo-selector" (close)="alCerrar()" (click)="clicFondo($event)">
+<dialog #hoja class="selector" aria-labelledby="titulo-selector" (close)="alCerrar()" (pointerdown)="presionarFondo($event)" (click)="clicFondo($event)">
   <div class="selector-cabecera">
     <div class="selector-titulo">
       <h2 id="titulo-selector">Elegir ejercicio</h2>
@@ -16,6 +16,7 @@
       autocapitalize="off"
       spellcheck="false"
       aria-label="Buscar ejercicio"
+      maxlength="80"
       placeholder="Buscar ejercicio"
       [value]="consulta()"
       (input)="$event.stopPropagation(); escribir($event)"
@@ -28,18 +29,19 @@
     @let b = busqueda();
     @if (b.resultados.length > 0) {
       <ul class="selector-resultados">
-        @for (resultado of b.resultados; track resultado.nombre) {
+        @for (resultado of b.resultados; track resultado.nombre; let i = $index) {
           <li>
             <button
               type="button"
               class="selector-opcion"
               [class.con-etiqueta]="resultado.origen === 'reciente'"
+              [attr.aria-describedby]="resultado.origen === 'reciente' ? 'selector-reciente-' + i : null"
               (click)="elegir(resultado.nombre)"
             >
               {{ resultado.nombre }}
             </button>
             @if (resultado.origen === 'reciente') {
-              <span class="selector-etiqueta">Reciente</span>
+              <span class="selector-etiqueta" [id]="'selector-reciente-' + i">Reciente</span>
             }
           </li>
         }

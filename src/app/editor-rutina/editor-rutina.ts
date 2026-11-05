@@ -149,6 +149,7 @@ export class EditorRutina implements OnInit {
     if (!destino) return;
     const id = this.pulso.agregarEjercicio(destino.rutinaId, destino.diaId, nombre);
     if (!id) {
+      this.anunciar(`No se pudo agregar «${this.nombreEjercicio(nombre)}»: el día ya no existe`);
       this.devolverFoco(destino.boton);
       return;
     }
@@ -165,7 +166,12 @@ export class EditorRutina implements OnInit {
   private devolverFoco(boton: HTMLElement) {
     afterNextRender(
       () => {
-        if (boton.isConnected) boton.focus();
+        if (boton.isConnected) {
+          boton.focus();
+          return;
+        }
+        const botones = Array.from(this.anfitrion.nativeElement.querySelectorAll<HTMLButtonElement>('button'));
+        botones.find((item) => item.textContent?.trim() === 'Agregar ejercicio')?.focus();
       },
       { injector: this.injector },
     );

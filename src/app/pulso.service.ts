@@ -19,6 +19,7 @@ import {
   periodoActual,
   uid,
 } from './modelos';
+import { limpiarNombre } from './buscar-ejercicio';
 import { Quitado, devolver, sacarDia, sacarEjercicio } from './deshacer';
 import { LIMITE_CARACTERES, cercaDelLimite, estadoDeGuardado, MS_PARA_GUARDANDO } from './guardado';
 import { SesionService } from './sesion.service';
@@ -767,16 +768,17 @@ export class PulsoService {
     const dia = this.estado()
       .rutinas.find((rutina) => rutina.id === rutinaId)
       ?.dias.find((item) => item.id === diaId);
-    if (!dia) return null;
+    const limpio = limpiarNombre(nombre);
+    if (!dia || !limpio) return null;
     this.limpiarQuitado();
     const anterior = dia.ejercicios[dia.ejercicios.length - 1];
     const ejercicio: Ejercicio = {
       id: uid(),
-      nombre,
-      series: anterior?.series ?? '3',
-      reps: anterior?.reps ?? '10',
-      descanso: anterior?.descanso ?? '60s',
-      imagen: imagenEjercicio(nombre) !== '',
+      nombre: limpio,
+      series: anterior?.series || '3',
+      reps: anterior?.reps || '10',
+      descanso: anterior?.descanso || '60s',
+      ...(imagenEjercicio(limpio) !== '' ? { imagen: true } : {}),
     };
     this.estado.update((actual) => ({
       ...actual,

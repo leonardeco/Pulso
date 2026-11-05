@@ -18,6 +18,7 @@ export class SelectorEjercicio {
   readonly cerrado = output<void>();
   readonly consulta = signal('');
   private terminado = false;
+  private empezoEnFondo = false;
 
   readonly busqueda = computed(() =>
     buscarEjercicios({
@@ -53,6 +54,7 @@ export class SelectorEjercicio {
   enter(evento: Event) {
     if ((evento as KeyboardEvent).isComposing) return;
     evento.preventDefault();
+    if (!this.consulta().trim()) return;
     const { resultados, crear } = this.busqueda();
     const nombre = resultados[0]?.nombre ?? crear;
     if (nombre) this.elegir(nombre);
@@ -75,7 +77,13 @@ export class SelectorEjercicio {
     this.cerrado.emit();
   }
 
+  presionarFondo(evento: Event) {
+    this.empezoEnFondo = evento.target === this.hoja().nativeElement;
+  }
+
   clicFondo(evento: MouseEvent) {
-    if (evento.target === this.hoja().nativeElement) this.cerrar();
+    const empezoEnFondo = this.empezoEnFondo;
+    this.empezoEnFondo = false;
+    if (empezoEnFondo && evento.target === this.hoja().nativeElement) this.cerrar();
   }
 }

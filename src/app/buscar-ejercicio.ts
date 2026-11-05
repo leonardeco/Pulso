@@ -17,7 +17,15 @@ export function normalizar(texto: string): string {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    .replace(/\s+/g, ' ')
     .trim();
+}
+
+export const LARGO_MAXIMO_NOMBRE = 80;
+const MAXIMO_RECIENTES_SIN_CONSULTA = 6;
+
+export function limpiarNombre(texto: string): string {
+  return texto.replace(/\s+/g, ' ').trim().slice(0, LARGO_MAXIMO_NOMBRE).trim();
 }
 
 export const ALIAS: Record<string, string[]> = {
@@ -79,7 +87,7 @@ export function buscarEjercicios(entrada: {
   max?: number;
 }): ResultadoBusqueda {
   const max = entrada.max ?? 8;
-  const consulta = entrada.consulta.trim();
+  const consulta = limpiarNombre(entrada.consulta);
   const q = normalizar(consulta);
 
   const candidatos: CoincidenciaEjercicio[] = [];
@@ -90,16 +98,24 @@ export function buscarEjercicios(entrada: {
     vistos.add(clave);
     candidatos.push({ nombre, origen });
   };
+
+  if (!q) {
+    for (const nombre of entrada.recientes.slice(0, MAXIMO_RECIENTES_SIN_CONSULTA)) agregar(nombre, 'reciente');
+    for (const nombre of entrada.catalogo) agregar(nombre, 'catalogo');
+    return { resultados: candidatos, crear: null };
+  }
+
   for (const nombre of entrada.recientes) agregar(nombre, 'reciente');
   for (const nombre of entrada.catalogo) agregar(nombre, 'catalogo');
 
-  if (!q) return { resultados: candidatos.slice(0, max), crear: null };
-
+  const exactos: CoincidenciaEjercicio[] = [];
   const empiezan: CoincidenciaEjercicio[] = [];
   const contienen: CoincidenciaEjercicio[] = [];
   for (const candidato of candidatos) {
     const clave = normalizar(candidato.nombre);
-    if (clave.startsWith(q)) {
+    if (clave === q) {
+      exactos.push(candidato);
+    } else if (clave.startsWith(q)) {
       empiezan.push(candidato);
     } else if (clave.includes(q) || (ALIAS_NORMALIZADOS.get(clave) ?? []).some((alias) => alias.includes(q))) {
       contienen.push(candidato);
@@ -107,7 +123,7 @@ export function buscarEjercicios(entrada: {
   }
 
   return {
-    resultados: [...empiezan, ...contienen].slice(0, max),
+    resultados: [...exactos, ...empiezan, ...contienen].slice(0, max),
     crear: vistos.has(q) ? null : consulta,
   };
 }
