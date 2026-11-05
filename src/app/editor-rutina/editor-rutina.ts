@@ -1,13 +1,14 @@
-import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild, type OnInit } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, effect, inject, input, output, signal, viewChild, type OnInit } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { EJERCICIOS, imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
+import { imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
 import { PulsoService } from '../pulso.service';
 import { abrirPdf, htmlRutinas } from '../exportar';
+import { SelectorEjercicio } from '../selector-ejercicio/selector-ejercicio';
 
 @Component({
   selector: 'app-editor-rutina',
-  imports: [RouterLink, NgTemplateOutlet],
+  imports: [RouterLink, NgTemplateOutlet, SelectorEjercicio],
   templateUrl: './editor-rutina.html',
   host: { style: 'display: contents', '(input)': 'pulso.olvidarQuitado()' },
 })
@@ -17,14 +18,13 @@ export class EditorRutina implements OnInit {
   readonly enlaceFicha = input(false);
   readonly anuncioInicial = input('');
   readonly duplicada = output<{ id: string; texto: string }>();
-  readonly ejercicios = EJERCICIOS;
   readonly foto = imagenEjercicio;
-  readonly idLista = computed(() => `ejercicios-${this.rutina().id}`);
   private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly btnDeshacer = viewChild<ElementRef<HTMLButtonElement>>('btnDeshacer');
   private readonly ancla = viewChild<ElementRef<HTMLElement>>('ancla');
   readonly anuncio = signal('');
+  readonly selector = signal<{ rutinaId: string; diaId: string; boton: HTMLElement } | null>(null);
   private hayFila = false;
   private devolviendo = false;
   private quitadoConTeclado = false;
@@ -134,6 +134,38 @@ export class EditorRutina implements OnInit {
       () => {
         const elemento = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
         elemento?.querySelector('input')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  abrirSelector(rutinaId: string, diaId: string, evento: Event) {
+    this.selector.set({ rutinaId, diaId, boton: evento.currentTarget as HTMLElement });
+  }
+
+  elegirEjercicio(nombre: string) {
+    const destino = this.selector();
+    this.selector.set(null);
+    if (!destino) return;
+    const id = this.pulso.agregarEjercicio(destino.rutinaId, destino.diaId, nombre);
+    if (!id) {
+      this.devolverFoco(destino.boton);
+      return;
+    }
+    this.anunciar(`${this.nombreEjercicio(nombre)} agregado`);
+    this.enfocarCampo(id);
+  }
+
+  cerrarSelector() {
+    const destino = this.selector();
+    this.selector.set(null);
+    if (destino) this.devolverFoco(destino.boton);
+  }
+
+  private devolverFoco(boton: HTMLElement) {
+    afterNextRender(
+      () => {
+        if (boton.isConnected) boton.focus();
       },
       { injector: this.injector },
     );

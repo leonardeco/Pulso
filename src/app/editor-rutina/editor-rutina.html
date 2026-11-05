@@ -68,7 +68,6 @@
         <label>
           Ejercicio
           <input
-            [attr.list]="idLista()"
             [value]="ejercicio.nombre"
             (input)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { nombre: texto($event) })"
           />
@@ -168,7 +167,7 @@
       <ng-container [ngTemplateOutlet]="filaQuitado" />
     }
     <div class="botones">
-      <button type="button" class="secundario" (click)="pulso.agregarEjercicio(r.id, dia.id, 'Sentadilla')">
+      <button type="button" class="secundario" (click)="abrirSelector(r.id, dia.id, $event)">
         Agregar ejercicio
       </button>
       <button
@@ -208,8 +207,6 @@
   <button type="button" class="texto" (click)="pdf()">Exportar PDF</button>
   <button type="button" class="texto peligro" (click)="borrar()">Borrar rutina</button>
 </div>
-<datalist [id]="idLista()">
-  @for (nombre of ejercicios; track nombre) {
-    <option [value]="nombre"></option>
-  }
-</datalist>
+@if (selector(); as s) {
+  <app-selector-ejercicio (elegido)="elegirEjercicio($event)" (cerrado)="cerrarSelector()" />
+}
