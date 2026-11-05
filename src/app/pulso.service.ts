@@ -1,4 +1,4 @@
-import { Injectable, effect, inject, signal, untracked } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { pedir } from './api';
 import { cuentaLocal, datosLocalesSinSubir, estudioParaSubir, marcarSubido } from './datos-locales';
 import {
@@ -18,6 +18,7 @@ import {
   periodoActual,
   uid,
 } from './modelos';
+import { LIMITE_CARACTERES, cercaDelLimite, estadoDeGuardado, MS_PARA_GUARDANDO } from './guardado';
 import { SesionService } from './sesion.service';
 
 const REINTENTO_MS = 15000;
@@ -126,13 +127,68 @@ export class PulsoService {
   readonly avisoSubida = signal<string[]>([]);
   readonly subidaPendiente = signal(false);
 
+  private readonly firmaConfirmada = signal('');
+  private readonly estaListo = signal(false);
+  private readonly temporizadorArmado = signal(false);
+  private readonly enVuelo = signal(false);
+  private readonly vueloLargo = signal(false);
+  private readonly firmaActual = computed(() => firma(this.estado()));
+
+  readonly estadoGuardado = computed(() =>
+    estadoDeGuardado({
+      pendiente:
+        this.estaListo() &&
+        this.sesion.esEntrenador() &&
+        (this.firmaActual() !== this.firmaConfirmada() || this.temporizadorArmado()),
+      enVuelo: this.enVuelo(),
+      msEnVuelo: this.vueloLargo() ? MS_PARA_GUARDANDO : 0,
+      conError: this.errorGuardado() !== '' || this.sinConexion(),
+    }),
+  );
+  readonly cercaDelLimite = computed(() => cercaDelLimite(this.firmaActual().length, LIMITE_CARACTERES));
+
   private version = 0;
-  private ultimoJson = '';
-  private temporizador: ReturnType<typeof setTimeout> | null = null;
+  private temporizadorId: ReturnType<typeof setTimeout> | null = null;
+  private vueloId: ReturnType<typeof setTimeout> | null = null;
+  private enCursoPromesa: Promise<void> | null = null;
   private reintento: ReturnType<typeof setTimeout> | null = null;
-  private listo = false;
-  private enCurso: Promise<void> | null = null;
   private repetir = false;
+
+  private get ultimoJson(): string {
+    return this.firmaConfirmada();
+  }
+  private set ultimoJson(valor: string) {
+    this.firmaConfirmada.set(valor);
+  }
+  private get listo(): boolean {
+    return this.estaListo();
+  }
+  private set listo(valor: boolean) {
+    this.estaListo.set(valor);
+  }
+  private get temporizador(): ReturnType<typeof setTimeout> | null {
+    return this.temporizadorId;
+  }
+  private set temporizador(valor: ReturnType<typeof setTimeout> | null) {
+    this.temporizadorId = valor;
+    this.temporizadorArmado.set(valor !== null);
+  }
+  private get enCurso(): Promise<void> | null {
+    return this.enCursoPromesa;
+  }
+  private set enCurso(valor: Promise<void> | null) {
+    this.enCursoPromesa = valor;
+    this.anular(this.vueloId);
+    this.vueloId = null;
+    this.vueloLargo.set(false);
+    this.enVuelo.set(valor !== null);
+    if (valor !== null) {
+      this.vueloId = setTimeout(() => {
+        this.vueloId = null;
+        this.vueloLargo.set(true);
+      }, MS_PARA_GUARDANDO);
+    }
+  }
   private datosSubida: { correo: string; clave: string } | null = null;
 
   constructor() {
