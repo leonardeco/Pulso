@@ -94,6 +94,19 @@ async function rutinasEnServidor(ctx: BrowserContext): Promise<RutinaServidor[]>
   return r.estado.rutinas;
 }
 
+// Abre la hoja de ejercicios, elige el ejercicio por su nombre (o lo crea si no existe) y espera a que se cierre.
+async function agregarEjercicio(editor: Locator, nombre: string, dia: Locator = editor): Promise<void> {
+  await dia.getByRole('button', { name: 'Agregar ejercicio' }).click();
+  const hoja = editor.locator('app-selector-ejercicio');
+  await expect(hoja.getByRole('heading', { name: 'Elegir ejercicio' })).toBeVisible();
+  await hoja.getByRole('searchbox', { name: 'Buscar ejercicio' }).fill(nombre);
+  await hoja
+    .getByRole('button', { name: nombre, exact: true })
+    .or(hoja.getByRole('button', { name: `Crear «${nombre}»`, exact: true }))
+    .click();
+  await expect(hoja).toHaveCount(0);
+}
+
 async function campo(editor: Locator, etiqueta: string, valor: string): Promise<void> {
   const input = editor.getByLabel(etiqueta, { exact: true });
   await input.fill(valor);
@@ -111,7 +124,7 @@ test('en rutinas, nombre, precio, día y ejercicio editados persisten tras recar
   await campo(editor, 'Nombre de la rutina', 'Fuerza tren inferior');
   await campo(editor, 'Precio', '45000');
   await campo(editor, 'Día', 'Lunes');
-  await editor.getByRole('button', { name: 'Agregar ejercicio' }).click();
+  await agregarEjercicio(editor, 'Sentadilla');
   await expect(editor.locator('.ejercicio')).toHaveCount(1);
   await editor.getByLabel('Ejercicio', { exact: true }).fill('Peso muerto');
   await campo(editor, 'Series', '4');
@@ -147,7 +160,7 @@ test('en la ficha del cliente, un ejercicio agregado y quitado queda igual que e
   await abrirFichaRutina(pa, 'Cliente Ficha');
   const editor = pa.locator('app-editor-rutina');
   await expect(editor.locator('.ejercicio')).toHaveCount(0);
-  await editor.getByRole('button', { name: 'Agregar ejercicio' }).click();
+  await agregarEjercicio(editor, 'Sentadilla');
   await expect(editor.locator('.ejercicio')).toHaveCount(1);
   await expect
     .poll(async () => (await rutinasEnServidor(a))[0]?.dias[0]?.ejercicios.length)
@@ -202,7 +215,7 @@ test('Sentadilla muestra su foto y un nombre desconocido no', async ({ browser }
   await crearRutina(pa, 'Rutina con fotos');
 
   const editor = pa.locator('app-editor-rutina');
-  await editor.getByRole('button', { name: 'Agregar ejercicio' }).click();
+  await agregarEjercicio(editor, 'Sentadilla');
   const foto = editor.locator('img.foto-ejercicio');
   await expect(editor.getByLabel('Ejercicio', { exact: true })).toHaveValue('Sentadilla');
   await expect(foto).toHaveCount(1);

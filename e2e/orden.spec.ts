@@ -76,13 +76,25 @@ async function crearRutina(page: Page, ctx: BrowserContext, nombre: string, clie
   return editor;
 }
 
-// Agrega ejercicios al día indicado y les pone nombre, en orden.
+// Abre la hoja de ejercicios, elige el ejercicio por su nombre (o lo crea si no existe) y espera a que se cierre.
+async function agregarEjercicio(editor: Locator, nombre: string, dia: Locator = editor): Promise<void> {
+  await dia.getByRole('button', { name: 'Agregar ejercicio' }).click();
+  const hoja = editor.locator('app-selector-ejercicio');
+  await expect(hoja.getByRole('heading', { name: 'Elegir ejercicio' })).toBeVisible();
+  await hoja.getByRole('searchbox', { name: 'Buscar ejercicio' }).fill(nombre);
+  await hoja
+    .getByRole('button', { name: nombre, exact: true })
+    .or(hoja.getByRole('button', { name: `Crear «${nombre}»`, exact: true }))
+    .click();
+  await expect(hoja).toHaveCount(0);
+}
+
+// Agrega ejercicios al día indicado eligiéndolos por nombre, en orden.
 async function ponerEjercicios(editor: Locator, nombres: string[], indiceDia = 0): Promise<void> {
   const dia = editor.locator('.dia-rutina').nth(indiceDia);
   for (let i = 0; i < nombres.length; i++) {
-    await dia.getByRole('button', { name: 'Agregar ejercicio' }).click();
+    await agregarEjercicio(editor, nombres[i], dia);
     await expect(dia.locator('.ejercicio')).toHaveCount(i + 1);
-    await dia.locator('.ejercicio').nth(i).getByLabel('Ejercicio', { exact: true }).fill(nombres[i]);
   }
 }
 
@@ -296,7 +308,8 @@ test('cada movimiento y cada copia se anuncia en la región viva con su posició
 
   const region = anuncio(editor);
   await expect(region).toHaveAttribute('aria-live', 'polite');
-  await expect(region).toHaveText('');
+  // Lo único anunciado hasta aquí es el último ejercicio agregado al preparar los días.
+  await expect(region).toHaveText('Dominadas agregado');
 
   const dias = editor.locator('.dia-rutina');
   const lunes = dias.nth(0).locator('.ejercicio');
@@ -449,7 +462,7 @@ test('elegir un día en el selector no mueve el ejercicio hasta pulsar Mover', a
   await expect(lunes.locator('.ejercicio')).toHaveCount(3);
   expect(await valoresDeEjercicios(lunes)).toEqual(['Press banca', 'Remo con barra', 'Peso muerto']);
   expect(await valoresDeEjercicios(martes)).toEqual(['Dominadas']);
-  await expect(anuncio(editor)).toHaveText('');
+  await expect(anuncio(editor)).toHaveText('Dominadas agregado');
   expect(await ordenEnServidor(ctx)).toEqual([['Press banca', 'Remo con barra', 'Peso muerto'], ['Dominadas']]);
 
   await ejercicio.locator('[data-orden=mover]').click();
@@ -475,7 +488,7 @@ test('pulsar Mover sin haber elegido un día no hace nada', async ({ browser }) 
   await expect(dias.nth(0).locator('.ejercicio')).toHaveCount(2);
   expect(await valoresDeEjercicios(dias.nth(0))).toEqual(['Press banca', 'Remo con barra']);
   expect(await valoresDeEjercicios(dias.nth(1))).toEqual(['Dominadas']);
-  await expect(anuncio(editor)).toHaveText('');
+  await expect(anuncio(editor)).toHaveText('Dominadas agregado');
   expect(await ordenEnServidor(ctx)).toEqual([['Press banca', 'Remo con barra'], ['Dominadas']]);
   await ctx.close();
 });

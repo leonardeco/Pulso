@@ -75,13 +75,25 @@ async function crearRutina(page: Page, ctx: BrowserContext, nombre: string): Pro
   return editor;
 }
 
-// Agrega ejercicios al primer día y les pone nombre, en orden.
+// Abre la hoja de ejercicios, elige el ejercicio por su nombre (o lo crea si no existe) y espera a que se cierre.
+async function agregarEjercicio(editor: Locator, nombre: string, dia: Locator = editor): Promise<void> {
+  await dia.getByRole('button', { name: 'Agregar ejercicio' }).click();
+  const hoja = editor.locator('app-selector-ejercicio');
+  await expect(hoja.getByRole('heading', { name: 'Elegir ejercicio' })).toBeVisible();
+  await hoja.getByRole('searchbox', { name: 'Buscar ejercicio' }).fill(nombre);
+  await hoja
+    .getByRole('button', { name: nombre, exact: true })
+    .or(hoja.getByRole('button', { name: `Crear «${nombre}»`, exact: true }))
+    .click();
+  await expect(hoja).toHaveCount(0);
+}
+
+// Agrega ejercicios al primer día eligiéndolos por nombre, en orden.
 async function ponerEjercicios(editor: Locator, nombres: string[]): Promise<void> {
   const dia = editor.locator('.dia-rutina').first();
   for (let i = 0; i < nombres.length; i++) {
-    await dia.getByRole('button', { name: 'Agregar ejercicio' }).click();
+    await agregarEjercicio(editor, nombres[i], dia);
     await expect(dia.locator('.ejercicio')).toHaveCount(i + 1);
-    await dia.locator('.ejercicio').nth(i).getByLabel('Ejercicio', { exact: true }).fill(nombres[i]);
   }
 }
 
@@ -300,7 +312,7 @@ test('hacer otro cambio hace desaparecer la fila de lo quitado y ya no se puede 
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Zancadas/);
 
-  await editor.getByRole('button', { name: 'Agregar ejercicio' }).first().click();
+  await agregarEjercicio(editor, 'Sentadilla', editor.locator('.dia-rutina').first());
   await expect(fila).toHaveCount(0);
   await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
   await expect(editor.locator('.ejercicio')).toHaveCount(2);
