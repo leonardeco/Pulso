@@ -14,6 +14,7 @@ import {
   buscarCliente,
   fechaISO,
   hoyISO,
+  imagenEjercicio,
   modalidadDe,
   periodoActual,
   uid,
@@ -762,15 +763,20 @@ export class PulsoService {
     this.estado.update((actual) => ({ ...actual, rutinas: resultado.rutinas }));
   }
 
-  agregarEjercicio(rutinaId: string, diaId: string): void {
+  agregarEjercicio(rutinaId: string, diaId: string, nombre: string): string | null {
+    const dia = this.estado()
+      .rutinas.find((rutina) => rutina.id === rutinaId)
+      ?.dias.find((item) => item.id === diaId);
+    if (!dia) return null;
     this.limpiarQuitado();
+    const anterior = dia.ejercicios[dia.ejercicios.length - 1];
     const ejercicio: Ejercicio = {
       id: uid(),
-      nombre: 'Sentadilla',
-      series: '3',
-      reps: '10',
-      descanso: '60s',
-      imagen: true,
+      nombre,
+      series: anterior?.series ?? '3',
+      reps: anterior?.reps ?? '10',
+      descanso: anterior?.descanso ?? '60s',
+      imagen: imagenEjercicio(nombre) !== '',
     };
     this.estado.update((actual) => ({
       ...actual,
@@ -778,12 +784,13 @@ export class PulsoService {
         if (rutina.id !== rutinaId) return rutina;
         return {
           ...rutina,
-          dias: rutina.dias.map((dia) =>
-            dia.id === diaId ? { ...dia, ejercicios: [...dia.ejercicios, ejercicio] } : dia,
+          dias: rutina.dias.map((item) =>
+            item.id === diaId ? { ...item, ejercicios: [...item.ejercicios, ejercicio] } : item,
           ),
         };
       }),
     }));
+    return ejercicio.id;
   }
 
   cambiarEjercicio(rutinaId: string, diaId: string, ejercicioId: string, cambios: Partial<Ejercicio>): void {
