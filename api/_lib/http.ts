@@ -8,7 +8,7 @@ export class ErrorHttp extends Error {
   }
 }
 
-const MAX_CUERPO = 1024 * 1024;
+export const MAX_CUERPO = 1024 * 1024;
 const COOKIE = 'pulso_sesion';
 
 export function json(data: unknown, status = 200, headers?: Record<string, string>): Response {
