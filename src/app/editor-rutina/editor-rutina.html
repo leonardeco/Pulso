@@ -136,10 +136,10 @@
           </button>
           @if (r.dias.length > 1) {
             <select
+              #destino
               class="mover-dia"
               data-orden="dia"
               [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' a otro día'"
-              (change)="moverADia($event, r.id, dia.id, ejercicio)"
             >
               <option value="" selected>Mover al día…</option>
               @for (destino of r.dias; track destino.id) {
@@ -148,6 +148,15 @@
                 }
               }
             </select>
+            <button
+              type="button"
+              class="orden-boton"
+              data-orden="mover"
+              [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' al día elegido'"
+              (click)="moverADia(destino, r.id, dia.id, ejercicio)"
+            >
+              Mover
+            </button>
           }
         </div>
         <button type="button" class="texto peligro" (click)="quitar($event, () => pulso.quitarEjercicio(r.id, dia.id, ejercicio.id))">

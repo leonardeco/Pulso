@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, Injector, afterNextRender, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { nombreModalidad, pesos } from '../modelos';
 import { PulsoService } from '../pulso.service';
@@ -11,6 +11,7 @@ import { EditorRutina } from '../editor-rutina/editor-rutina';
 })
 export class Rutinas {
   readonly pulso = inject(PulsoService);
+  private readonly injector = inject(Injector);
   readonly pesos = pesos;
   readonly nombreModalidad = nombreModalidad;
   readonly error = signal('');
@@ -42,6 +43,16 @@ export class Rutinas {
     this.precio = 0;
     this.error.set('');
     this.abierta.set(id);
+  }
+
+  abrirCopia(id: string) {
+    this.abierta.set(id);
+    afterNextRender(
+      () => {
+        document.querySelector(`[data-id="${CSS.escape(id)}"]`)?.querySelector('input')?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   alternar(id: string) {

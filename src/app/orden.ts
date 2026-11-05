@@ -67,7 +67,7 @@ export function duplicarDia(
   const indice = rutina ? rutina.dias.findIndex((item) => item.id === diaId) : -1;
   if (!rutina || indice < 0) return null;
 
-  const copia = copiarDia(rutina.dias[indice], nuevoId, `${rutina.dias[indice].nombre} (copia)`);
+  const copia = copiarDia(rutina.dias[indice], nuevoId, `${rutina.dias[indice].nombre.trim() || 'Sin nombre'} (copia)`);
   return {
     rutinas: cambiarDia(rutinas, rutinaId, (dias) => insertar(dias, indice + 1, copia)),
     id: copia.id,
@@ -85,7 +85,7 @@ export function duplicarRutina(rutinas: Rutina[], rutinaId: string, nuevoId: Nue
   const copia: Rutina = {
     ...origen,
     id,
-    nombre: `${origen.nombre} (copia)`,
+    nombre: `${origen.nombre.trim() || 'Sin nombre'} (copia)`,
     dias: origen.dias.map((dia) => copiarDia(dia, nuevoId, dia.nombre)),
   };
   return {

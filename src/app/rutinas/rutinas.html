@@ -47,7 +47,7 @@
       </button>
 
       @if (abierta() === rutina.id) {
-        <app-editor-rutina [rutina]="rutina" [enlaceFicha]="true" />
+        <app-editor-rutina [rutina]="rutina" [enlaceFicha]="true" (duplicada)="abrirCopia($event)" />
       }
     </article>
   }

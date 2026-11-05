@@ -85,6 +85,13 @@ describe('duplicar un día', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it('si el día no tiene nombre, la copia no empieza con un espacio', () => {
+    const entrada = ejemplo();
+    entrada[0].dias[0].nombre = '   ';
+    const res = duplicarDia(entrada, 'r1', 'd1', contador())!;
+    expect(res.rutinas[0].dias[1].nombre).toBe('Sin nombre (copia)');
+  });
+
   it('duplicar el último día deja la copia al final', () => {
     const res = duplicarDia(ejemplo(), 'r1', 'd3', contador())!;
     expect(res.rutinas[0].dias.map((d) => d.id)).toEqual(['d1', 'd2', 'd3', 'nuevo1']);
@@ -119,6 +126,13 @@ describe('duplicar una rutina', () => {
     const ids = todosLosIds(res.rutinas);
     expect(new Set(ids).size).toBe(ids.length);
     expect(todosLosIds([copia]).every((id) => id.startsWith('nuevo'))).toBe(true);
+  });
+
+  it('si la rutina no tiene nombre, la copia no empieza con un espacio', () => {
+    const entrada = ejemplo();
+    entrada[0].nombre = '';
+    const res = duplicarRutina(entrada, 'r1', contador())!;
+    expect(res.rutinas[1].nombre).toBe('Sin nombre (copia)');
   });
 
   it('devuelve null si la rutina no existe', () => {

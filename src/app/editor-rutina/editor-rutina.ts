@@ -1,4 +1,4 @@
-import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { EJERCICIOS, imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
@@ -15,6 +15,7 @@ export class EditorRutina {
   readonly pulso = inject(PulsoService);
   readonly rutina = input.required<Rutina>();
   readonly enlaceFicha = input(false);
+  readonly duplicada = output<string>();
   readonly ejercicios = EJERCICIOS;
   readonly foto = imagenEjercicio;
   readonly idLista = computed(() => `ejercicios-${this.rutina().id}`);
@@ -135,21 +136,22 @@ export class EditorRutina {
   duplicarEjercicio(rutinaId: string, diaId: string, ejercicio: Ejercicio) {
     const id = this.pulso.duplicarEjercicio(rutinaId, diaId, ejercicio.id);
     if (!id) return;
-    this.anuncio.set(`${this.nombreEjercicio(ejercicio.nombre)} duplicado`);
+    this.anunciar(`${this.nombreEjercicio(ejercicio.nombre)} duplicado`);
     this.enfocarCampo(id);
   }
 
   duplicarDia(rutinaId: string, dia: DiaRutina) {
     const id = this.pulso.duplicarDia(rutinaId, dia.id);
     if (!id) return;
-    this.anuncio.set(`${dia.nombre.trim() || 'Día sin nombre'} duplicado`);
+    this.anunciar(`${dia.nombre.trim() || 'Día sin nombre'} duplicado`);
     this.enfocarCampo(id);
   }
 
   duplicarRutina(rutina: Rutina) {
     const id = this.pulso.duplicarRutina(rutina.id);
     if (!id) return;
-    this.anuncio.set(`${rutina.nombre.trim() || 'Rutina sin nombre'} duplicada`);
+    this.anunciar(`${rutina.nombre.trim() || 'Rutina sin nombre'} duplicada`);
+    this.duplicada.emit(id);
     this.enfocarCampo(id);
   }
 
@@ -171,8 +173,7 @@ export class EditorRutina {
     );
   }
 
-  moverADia(evento: Event, rutinaId: string, diaId: string, ejercicio: Ejercicio) {
-    const selector = evento.target as HTMLSelectElement;
+  moverADia(selector: HTMLSelectElement, rutinaId: string, diaId: string, ejercicio: Ejercicio) {
     const destino = selector.value;
     selector.value = '';
     if (!destino) return;
@@ -190,9 +191,14 @@ export class EditorRutina {
 
   private anunciarMovido(ejercicio: Ejercicio, resultado: { posicion: number; total: number }) {
     const nombre = this.nombreEjercicio(ejercicio.nombre);
-    this.anuncio.set(
+    this.anunciar(
       `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} movida a la posición ${resultado.posicion} de ${resultado.total}`,
     );
+  }
+
+  private anunciar(texto: string) {
+    this.anuncio.set('');
+    afterNextRender(() => this.anuncio.set(texto), { injector: this.injector });
   }
 
   borrar() {
