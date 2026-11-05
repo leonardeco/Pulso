@@ -1,7 +1,7 @@
-import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { EJERCICIOS, imagenEjercicio, type Rutina } from '../modelos';
+import { EJERCICIOS, imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
 import { PulsoService } from '../pulso.service';
 import { abrirPdf, htmlRutinas } from '../exportar';
 
@@ -22,6 +22,7 @@ export class EditorRutina {
   private readonly injector = inject(Injector);
   private readonly btnDeshacer = viewChild<ElementRef<HTMLButtonElement>>('btnDeshacer');
   private readonly ancla = viewChild<ElementRef<HTMLElement>>('ancla');
+  readonly anuncio = signal('');
   private hayFila = false;
   private devolviendo = false;
   private quitadoConTeclado = false;
@@ -115,6 +116,83 @@ export class EditorRutina {
   diaAlFinal(rutinaId: string, total: number): boolean {
     const quitado = this.pulso.quitado();
     return quitado?.tipo === 'dia' && quitado.rutinaId === rutinaId && quitado.indice >= total;
+  }
+
+  nombreEjercicio(nombre: string): string {
+    return nombre.trim() || 'ejercicio sin nombre';
+  }
+
+  private enfocarCampo(id: string) {
+    afterNextRender(
+      () => {
+        const elemento = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
+        elemento?.querySelector('input')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  duplicarEjercicio(rutinaId: string, diaId: string, ejercicio: Ejercicio) {
+    const id = this.pulso.duplicarEjercicio(rutinaId, diaId, ejercicio.id);
+    if (!id) return;
+    this.anuncio.set(`${this.nombreEjercicio(ejercicio.nombre)} duplicado`);
+    this.enfocarCampo(id);
+  }
+
+  duplicarDia(rutinaId: string, dia: DiaRutina) {
+    const id = this.pulso.duplicarDia(rutinaId, dia.id);
+    if (!id) return;
+    this.anuncio.set(`${dia.nombre.trim() || 'Día sin nombre'} duplicado`);
+    this.enfocarCampo(id);
+  }
+
+  duplicarRutina(rutina: Rutina) {
+    const id = this.pulso.duplicarRutina(rutina.id);
+    if (!id) return;
+    this.anuncio.set(`${rutina.nombre.trim() || 'Rutina sin nombre'} duplicada`);
+    this.enfocarCampo(id);
+  }
+
+  mover(rutinaId: string, diaId: string, ejercicio: Ejercicio, delta: -1 | 1) {
+    const resultado = this.pulso.moverEjercicio(rutinaId, diaId, ejercicio.id, delta);
+    if (!resultado) return;
+    this.anunciarMovido(ejercicio, resultado);
+    const preferido = delta < 0 ? 'subir' : 'bajar';
+    const otro = delta < 0 ? 'bajar' : 'subir';
+    afterNextRender(
+      () => {
+        const fila = this.anfitrion.nativeElement.querySelector(`[data-id="${CSS.escape(ejercicio.id)}"]`);
+        const boton = (accion: string) => fila?.querySelector<HTMLButtonElement>(`[data-orden="${accion}"]`) ?? null;
+        const primero = boton(preferido);
+        const segundo = boton(otro);
+        (primero && !primero.disabled ? primero : segundo && !segundo.disabled ? segundo : primero)?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  moverADia(evento: Event, rutinaId: string, diaId: string, ejercicio: Ejercicio) {
+    const selector = evento.target as HTMLSelectElement;
+    const destino = selector.value;
+    selector.value = '';
+    if (!destino) return;
+    const resultado = this.pulso.moverEjercicioADia(rutinaId, diaId, ejercicio.id, destino);
+    if (!resultado) return;
+    this.anunciarMovido(ejercicio, resultado);
+    afterNextRender(
+      () => {
+        const fila = this.anfitrion.nativeElement.querySelector(`[data-id="${CSS.escape(ejercicio.id)}"]`);
+        fila?.querySelector<HTMLElement>('[data-orden="dia"]')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private anunciarMovido(ejercicio: Ejercicio, resultado: { posicion: number; total: number }) {
+    const nombre = this.nombreEjercicio(ejercicio.nombre);
+    this.anuncio.set(
+      `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} movida a la posición ${resultado.posicion} de ${resultado.total}`,
+    );
   }
 
   borrar() {

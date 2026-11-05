@@ -1,5 +1,6 @@
 @let r = rutina();
-<label #ancla tabindex="-1">
+<div class="sr-only" role="status" aria-live="polite">{{ anuncio() }}</div>
+<label #ancla tabindex="-1" [attr.data-id]="r.id">
   Nombre de la rutina
   <input [value]="r.nombre" (change)="pulso.cambiarRutina(r.id, { nombre: texto($event) })" />
 </label>
@@ -95,6 +96,60 @@
             />
           </label>
         </div>
+        <div class="botones orden">
+          <button
+            type="button"
+            class="orden-boton"
+            data-orden="subir"
+            [disabled]="j === 0"
+            [attr.aria-label]="'Subir ' + nombreEjercicio(ejercicio.nombre)"
+            (click)="mover(r.id, dia.id, ejercicio, -1)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M12 5l7 7-1.4 1.4L13 8.8V19h-2V8.8l-4.6 4.6L5 12z" fill="currentColor" />
+            </svg>
+            Subir
+          </button>
+          <button
+            type="button"
+            class="orden-boton"
+            data-orden="bajar"
+            [disabled]="j === dia.ejercicios.length - 1"
+            [attr.aria-label]="'Bajar ' + nombreEjercicio(ejercicio.nombre)"
+            (click)="mover(r.id, dia.id, ejercicio, 1)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M12 19l-7-7 1.4-1.4L11 15.2V5h2v10.2l4.6-4.6L19 12z" fill="currentColor" />
+            </svg>
+            Bajar
+          </button>
+          <button
+            type="button"
+            class="orden-boton"
+            [attr.aria-label]="'Duplicar ' + nombreEjercicio(ejercicio.nombre)"
+            (click)="duplicarEjercicio(r.id, dia.id, ejercicio)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor" />
+            </svg>
+            Duplicar
+          </button>
+          @if (r.dias.length > 1) {
+            <select
+              class="mover-dia"
+              data-orden="dia"
+              [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' a otro día'"
+              (change)="moverADia($event, r.id, dia.id, ejercicio)"
+            >
+              <option value="" selected>Mover al día…</option>
+              @for (destino of r.dias; track destino.id) {
+                @if (destino.id !== dia.id) {
+                  <option [value]="destino.id">{{ destino.nombre.trim() || 'Día sin nombre' }}</option>
+                }
+              }
+            </select>
+          }
+        </div>
         <button type="button" class="texto peligro" (click)="quitar($event, () => pulso.quitarEjercicio(r.id, dia.id, ejercicio.id))">
           Quitar ejercicio
         </button>
@@ -106,6 +161,17 @@
     <div class="botones">
       <button type="button" class="secundario" (click)="pulso.agregarEjercicio(r.id, dia.id)">
         Agregar ejercicio
+      </button>
+      <button
+        type="button"
+        class="orden-boton"
+        [attr.aria-label]="'Duplicar día ' + (dia.nombre.trim() || 'sin nombre')"
+        (click)="duplicarDia(r.id, dia)"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor" />
+        </svg>
+        Duplicar día
       </button>
       <button type="button" class="texto" (click)="quitar($event, () => pulso.quitarDia(r.id, dia.id))">Quitar día</button>
     </div>
@@ -119,6 +185,17 @@
   @if (r.clienteId) {
     <button type="button" class="texto" (click)="pulso.copiarRutina(r.id, null)">Guardar como plantilla</button>
   }
+  <button
+    type="button"
+    class="orden-boton"
+    [attr.aria-label]="'Duplicar rutina ' + (r.nombre.trim() || 'sin nombre')"
+    (click)="duplicarRutina(r)"
+  >
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor" />
+    </svg>
+    Duplicar rutina
+  </button>
   <button type="button" class="texto" (click)="pdf()">Exportar PDF</button>
   <button type="button" class="texto peligro" (click)="borrar()">Borrar rutina</button>
 </div>
