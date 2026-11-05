@@ -163,6 +163,9 @@ export class PulsoService {
   private enCursoPromesa: Promise<void> | null = null;
   private reintento: ReturnType<typeof setTimeout> | null = null;
   private quitadoId: ReturnType<typeof setTimeout> | null = null;
+  private quitadoRestante = DESHACER_MS;
+  private quitadoDesde = 0;
+  private quitadoPausas = 0;
   private repetir = false;
 
   private get ultimoJson(): string {
@@ -371,16 +374,42 @@ export class PulsoService {
   private limpiarQuitado(): void {
     this.anular(this.quitadoId);
     this.quitadoId = null;
+    this.quitadoPausas = 0;
+    this.quitadoRestante = DESHACER_MS;
     this._quitado.set(null);
+  }
+
+  private armarQuitado(ms: number): void {
+    this.anular(this.quitadoId);
+    this.quitadoDesde = Date.now();
+    this.quitadoRestante = ms;
+    this.quitadoId = setTimeout(() => this.limpiarQuitado(), ms);
   }
 
   private fijarQuitado(quitado: Quitado): void {
     this.limpiarQuitado();
     this._quitado.set(quitado);
-    this.quitadoId = setTimeout(() => {
-      this.quitadoId = null;
-      this._quitado.set(null);
-    }, DESHACER_MS);
+    this.armarQuitado(DESHACER_MS);
+  }
+
+  pausarDeshacer(): void {
+    if (!this._quitado()) return;
+    this.quitadoPausas += 1;
+    if (this.quitadoId === null) return;
+    this.anular(this.quitadoId);
+    this.quitadoId = null;
+    this.quitadoRestante = Math.max(0, this.quitadoRestante - (Date.now() - this.quitadoDesde));
+  }
+
+  reanudarDeshacer(): void {
+    if (!this._quitado() || this.quitadoPausas === 0) return;
+    this.quitadoPausas -= 1;
+    if (this.quitadoPausas > 0 || this.quitadoId !== null) return;
+    this.armarQuitado(this.quitadoRestante);
+  }
+
+  olvidarQuitado(): void {
+    if (this._quitado()) this.limpiarQuitado();
   }
 
   deshacer(): void {
