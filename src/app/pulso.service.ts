@@ -18,12 +18,14 @@ import {
   periodoActual,
   uid,
 } from './modelos';
+import { Quitado, devolver, sacarDia, sacarEjercicio } from './deshacer';
 import { LIMITE_CARACTERES, cercaDelLimite, estadoDeGuardado, MS_PARA_GUARDANDO } from './guardado';
 import { SesionService } from './sesion.service';
 
 const REINTENTO_MS = 15000;
 const ESPERA_MS = 600;
 const MAX_KEEPALIVE = 60 * 1024;
+const DESHACER_MS = 10000;
 
 interface Respuesta {
   estado: Estado;
@@ -127,6 +129,9 @@ export class PulsoService {
   readonly avisoSubida = signal<string[]>([]);
   readonly subidaPendiente = signal(false);
 
+  private readonly _quitado = signal<Quitado | null>(null);
+  readonly quitado = this._quitado.asReadonly();
+
   private readonly firmaConfirmada = signal('');
   private readonly estaListo = signal(false);
   private readonly temporizadorArmado = signal(false);
@@ -157,6 +162,7 @@ export class PulsoService {
   private vueloId: ReturnType<typeof setTimeout> | null = null;
   private enCursoPromesa: Promise<void> | null = null;
   private reintento: ReturnType<typeof setTimeout> | null = null;
+  private quitadoId: ReturnType<typeof setTimeout> | null = null;
   private repetir = false;
 
   private get ultimoJson(): string {
@@ -338,6 +344,7 @@ export class PulsoService {
     this.anular(this.reintento);
     this.temporizador = null;
     this.reintento = null;
+    this.limpiarQuitado();
     this.datosSubida = null;
     this.errorGuardado.set('');
     this.avisoSubida.set([]);
@@ -361,7 +368,30 @@ export class PulsoService {
     if (t !== null) clearTimeout(t);
   }
 
+  private limpiarQuitado(): void {
+    this.anular(this.quitadoId);
+    this.quitadoId = null;
+    this._quitado.set(null);
+  }
+
+  private fijarQuitado(quitado: Quitado): void {
+    this.limpiarQuitado();
+    this._quitado.set(quitado);
+    this.quitadoId = setTimeout(() => {
+      this.quitadoId = null;
+      this._quitado.set(null);
+    }, DESHACER_MS);
+  }
+
+  deshacer(): void {
+    const quitado = this._quitado();
+    if (!quitado) return;
+    this.limpiarQuitado();
+    this.estado.update((actual) => ({ ...actual, rutinas: devolver(actual.rutinas, quitado) }));
+  }
+
   private aplicar(datos: { estado: Estado; version: number }): void {
+    this.limpiarQuitado();
     const estado = normalizar(datos.estado);
     this.version = datos.version;
     this.ultimoJson = firma(estado);
@@ -374,6 +404,7 @@ export class PulsoService {
     this.anular(this.reintento);
     this.temporizador = null;
     this.reintento = null;
+    this.limpiarQuitado();
     this.datosSubida = null;
     this.subidaPendiente.set(false);
     this.sesionVencida.set(true);
@@ -498,6 +529,7 @@ export class PulsoService {
   }
 
   eliminarCliente(id: string): void {
+    this.limpiarQuitado();
     this.estado.update((actual) => ({
       ...actual,
       clientes: actual.clientes.filter((cliente) => cliente.id !== id),
@@ -643,6 +675,7 @@ export class PulsoService {
   }
 
   nuevaRutina(clienteId: string | null, nombre = '', precio = 0): string {
+    this.limpiarQuitado();
     const rutina: Rutina = {
       id: uid(),
       clienteId,
@@ -655,6 +688,7 @@ export class PulsoService {
   }
 
   cambiarRutina(id: string, cambios: Partial<Pick<Rutina, 'nombre' | 'precio'>>): void {
+    this.limpiarQuitado();
     this.estado.update((actual) => ({
       ...actual,
       rutinas: actual.rutinas.map((rutina) => (rutina.id === id ? { ...rutina, ...cambios } : rutina)),
@@ -662,6 +696,7 @@ export class PulsoService {
   }
 
   agregarDia(rutinaId: string): void {
+    this.limpiarQuitado();
     const dia: DiaRutina = { id: uid(), nombre: 'Día nuevo', ejercicios: [] };
     this.estado.update((actual) => ({
       ...actual,
@@ -672,6 +707,7 @@ export class PulsoService {
   }
 
   cambiarDia(rutinaId: string, diaId: string, nombre: string): void {
+    this.limpiarQuitado();
     this.estado.update((actual) => ({
       ...actual,
       rutinas: actual.rutinas.map((rutina) =>
@@ -683,15 +719,14 @@ export class PulsoService {
   }
 
   quitarDia(rutinaId: string, diaId: string): void {
-    this.estado.update((actual) => ({
-      ...actual,
-      rutinas: actual.rutinas.map((rutina) =>
-        rutina.id === rutinaId ? { ...rutina, dias: rutina.dias.filter((dia) => dia.id !== diaId) } : rutina,
-      ),
-    }));
+    const resultado = sacarDia(this.estado().rutinas, rutinaId, diaId);
+    if (!resultado) return;
+    this.fijarQuitado(resultado.quitado);
+    this.estado.update((actual) => ({ ...actual, rutinas: resultado.rutinas }));
   }
 
   agregarEjercicio(rutinaId: string, diaId: string): void {
+    this.limpiarQuitado();
     const ejercicio: Ejercicio = {
       id: uid(),
       nombre: 'Sentadilla',
@@ -715,6 +750,7 @@ export class PulsoService {
   }
 
   cambiarEjercicio(rutinaId: string, diaId: string, ejercicioId: string, cambios: Partial<Ejercicio>): void {
+    this.limpiarQuitado();
     this.estado.update((actual) => ({
       ...actual,
       rutinas: actual.rutinas.map((rutina) => {
@@ -734,27 +770,19 @@ export class PulsoService {
   }
 
   quitarEjercicio(rutinaId: string, diaId: string, ejercicioId: string): void {
-    this.estado.update((actual) => ({
-      ...actual,
-      rutinas: actual.rutinas.map((rutina) => {
-        if (rutina.id !== rutinaId) return rutina;
-        return {
-          ...rutina,
-          dias: rutina.dias.map((dia) =>
-            dia.id === diaId
-              ? { ...dia, ejercicios: dia.ejercicios.filter((item) => item.id !== ejercicioId) }
-              : dia,
-          ),
-        };
-      }),
-    }));
+    const resultado = sacarEjercicio(this.estado().rutinas, rutinaId, diaId, ejercicioId);
+    if (!resultado) return;
+    this.fijarQuitado(resultado.quitado);
+    this.estado.update((actual) => ({ ...actual, rutinas: resultado.rutinas }));
   }
 
   eliminarRutina(id: string): void {
+    this.limpiarQuitado();
     this.estado.update((actual) => ({ ...actual, rutinas: actual.rutinas.filter((item) => item.id !== id) }));
   }
 
   copiarRutina(id: string, clienteId: string | null): void {
+    this.limpiarQuitado();
     this.estado.update((actual) => {
       const origen = actual.rutinas.find((item) => item.id === id);
       if (!origen) return actual;
