@@ -112,6 +112,7 @@
             <label>
               Ejercicio
               <input
+                maxlength="80"
                 [value]="ejercicio.nombre"
                 (input)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { nombre: texto($event) })"
               />
@@ -181,6 +182,7 @@
                   #destino
                   class="mover-dia"
                   data-orden="dia"
+                  (input)="$event.stopPropagation()"
                   [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' a otro día'"
                 >
                   <option value="" selected>Mover al día…</option>

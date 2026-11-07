@@ -1029,12 +1029,12 @@ textarea:focus {
   color: var(--ink);
 }
 
-.ejercicio {
+app-editor-rutina .ejercicio {
   gap: 0;
   padding: 8px;
 }
 
-.ejercicio.abierto {
+app-editor-rutina .ejercicio.abierto {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
 }
 
@@ -1093,7 +1093,7 @@ textarea:focus {
   transition: transform 150ms ease-out;
 }
 
-.ejercicio.abierto .chevron {
+app-editor-rutina .ejercicio.abierto .chevron {
   transform: rotate(180deg);
 }
 
