@@ -45,4 +45,15 @@ describe('resumenEjercicio', () => {
   it('no recorta una parte que mide exactamente 12 caracteres', () => {
     expect(resumenEjercicio({ series: '3', reps: '123456789012', descanso: '' })).toBe('3 × 123456789012');
   });
+
+  it('cuenta cada emoji como un solo carácter al medir', () => {
+    const doce = '😀'.repeat(12);
+    expect(resumenEjercicio({ series: '', reps: doce, descanso: '' })).toBe(doce);
+  });
+
+  it('no parte un emoji al recortar', () => {
+    const resumen = resumenEjercicio({ series: '', reps: '1234567890😀😀😀', descanso: '' });
+    expect(resumen).toBe('1234567890😀…');
+    expect(resumen).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+  });
 });

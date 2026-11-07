@@ -63,7 +63,7 @@
             (click)="alternar(ejercicio.id)"
           >
             <span class="ejercicio-textos">
-              <span class="ejercicio-nombre">{{ nombreVisible(ejercicio.nombre) }}</span>
+              <span class="ejercicio-nombre" [attr.title]="nombreVisible(ejercicio.nombre)">{{ nombreVisible(ejercicio.nombre) }}</span>
               <span class="ejercicio-datos">{{ resumen(ejercicio) }}</span>
             </span>
             <svg class="chevron" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
@@ -148,7 +148,7 @@
                   type="button"
                   class="atajo"
                   [attr.aria-label]="'Reps ' + valor + ' en ' + nombreEjercicio(ejercicio.nombre)"
-                  (click)="atajo(reps, valor, r.id, dia.id, ejercicio.id, 'reps')"
+                  (click)="atajo(reps, valor, r.id, dia.id, ejercicio.id, 'reps', ejercicio.nombre)"
                 >
                   {{ valor }}
                 </button>
@@ -158,7 +158,7 @@
                   type="button"
                   class="atajo"
                   [attr.aria-label]="'Descanso ' + valor + ' en ' + nombreEjercicio(ejercicio.nombre)"
-                  (click)="atajo(descanso, valor, r.id, dia.id, ejercicio.id, 'descanso')"
+                  (click)="atajo(descanso, valor, r.id, dia.id, ejercicio.id, 'descanso', ejercicio.nombre)"
                 >
                   {{ valor }}
                 </button>

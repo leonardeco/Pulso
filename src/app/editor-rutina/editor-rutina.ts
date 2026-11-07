@@ -1,4 +1,4 @@
-import { Component, ElementRef, Injector, afterNextRender, effect, inject, input, output, signal, viewChild, type OnInit } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild, type OnInit } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
@@ -6,6 +6,7 @@ import { PulsoService } from '../pulso.service';
 import { abrirPdf, htmlRutinas } from '../exportar';
 import { SelectorEjercicio } from '../selector-ejercicio/selector-ejercicio';
 import { resumenEjercicio } from '../resumen-ejercicio';
+import { FilaAbierta } from './fila-abierta';
 
 @Component({
   selector: 'app-editor-rutina',
@@ -25,7 +26,13 @@ export class EditorRutina implements OnInit {
   private readonly btnDeshacer = viewChild<ElementRef<HTMLButtonElement>>('btnDeshacer');
   private readonly ancla = viewChild<ElementRef<HTMLElement>>('ancla');
   readonly anuncio = signal('');
-  readonly abierto = signal<string | null>(null);
+  private readonly fila = inject(FilaAbierta);
+  readonly abierto = computed(() => {
+    const id = this.fila.id();
+    if (id === null) return null;
+    const existe = this.rutina().dias.some((dia) => dia.ejercicios.some((ejercicio) => ejercicio.id === id));
+    return existe ? id : null;
+  });
   readonly selector = signal<{ rutinaId: string; diaId: string; boton: HTMLElement } | null>(null);
   private hayFila = false;
   private devolviendo = false;
@@ -132,7 +139,15 @@ export class EditorRutina implements OnInit {
   }
 
   alternar(id: string) {
-    this.abierto.set(this.abierto() === id ? null : id);
+    this.confirmarCampo();
+    this.fila.alternar(id);
+  }
+
+  private confirmarCampo() {
+    const activo = document.activeElement;
+    if ((activo instanceof HTMLInputElement || activo instanceof HTMLSelectElement) && this.anfitrion.nativeElement.contains(activo)) {
+      activo.blur();
+    }
   }
 
   resumen(ejercicio: Ejercicio): string {
@@ -143,13 +158,16 @@ export class EditorRutina implements OnInit {
     return nombre.trim() || 'Ejercicio sin nombre';
   }
 
-  atajo(campo: HTMLInputElement, valor: string, rutinaId: string, diaId: string, id: string, clave: 'reps' | 'descanso') {
+  atajo(campo: HTMLInputElement, valor: string, rutinaId: string, diaId: string, id: string, clave: 'reps' | 'descanso', nombre: string) {
     campo.value = valor;
     this.pulso.cambiarEjercicio(rutinaId, diaId, id, { [clave]: valor });
+    const etiqueta = clave === 'reps' ? 'Reps' : 'Descanso';
+    this.anunciar(`${etiqueta} ${valor} en ${this.nombreEjercicio(nombre)}`);
   }
 
   quitarEjercicio(evento: MouseEvent, rutinaId: string, diaId: string, id: string) {
-    if (this.abierto() === id) this.abierto.set(null);
+    this.confirmarCampo();
+    if (this.fila.id() === id) this.fila.cerrar();
     this.quitar(evento, () => this.pulso.quitarEjercicio(rutinaId, diaId, id));
   }
 
@@ -168,6 +186,7 @@ export class EditorRutina implements OnInit {
   }
 
   elegirEjercicio(nombre: string) {
+    this.confirmarCampo();
     const destino = this.selector();
     this.selector.set(null);
     if (!destino) return;
@@ -178,7 +197,7 @@ export class EditorRutina implements OnInit {
       return;
     }
     this.anunciar(`${this.nombreEjercicio(nombre)} agregado`);
-    this.abierto.set(id);
+    this.fila.abrir(id);
     this.enfocarCampo(id);
   }
 
@@ -203,10 +222,11 @@ export class EditorRutina implements OnInit {
   }
 
   duplicarEjercicio(rutinaId: string, diaId: string, ejercicio: Ejercicio) {
+    this.confirmarCampo();
     const id = this.pulso.duplicarEjercicio(rutinaId, diaId, ejercicio.id);
     if (!id) return;
     this.anunciar(`${this.nombreEjercicio(ejercicio.nombre)} duplicado`);
-    this.abierto.set(id);
+    this.fila.abrir(id);
     this.enfocarCampo(id);
   }
 
@@ -227,10 +247,11 @@ export class EditorRutina implements OnInit {
   }
 
   mover(rutinaId: string, diaId: string, ejercicio: Ejercicio, delta: -1 | 1) {
+    this.confirmarCampo();
     const resultado = this.pulso.moverEjercicio(rutinaId, diaId, ejercicio.id, delta);
     if (!resultado) return;
     this.anunciarMovido(ejercicio, resultado);
-    this.abierto.set(ejercicio.id);
+    this.fila.abrir(ejercicio.id);
     const preferido = delta < 0 ? 'subir' : 'bajar';
     const otro = delta < 0 ? 'bajar' : 'subir';
     afterNextRender(
@@ -246,13 +267,14 @@ export class EditorRutina implements OnInit {
   }
 
   moverADia(selector: HTMLSelectElement, rutinaId: string, diaId: string, ejercicio: Ejercicio) {
+    this.confirmarCampo();
     const destino = selector.value;
     selector.value = '';
     if (!destino) return;
     const resultado = this.pulso.moverEjercicioADia(rutinaId, diaId, ejercicio.id, destino);
     if (!resultado) return;
     this.anunciarMovido(ejercicio, resultado);
-    this.abierto.set(ejercicio.id);
+    this.fila.abrir(ejercicio.id);
     afterNextRender(
       () => {
         const fila = this.anfitrion.nativeElement.querySelector(`[data-id="${CSS.escape(ejercicio.id)}"]`);

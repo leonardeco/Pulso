@@ -8,7 +8,8 @@ const MAXIMO = 12;
 
 function limpiar(texto: string | null | undefined): string {
   const limpio = (texto ?? '').trim();
-  return limpio.length > MAXIMO ? `${limpio.slice(0, MAXIMO - 1)}…` : limpio;
+  const letras = Array.from(limpio);
+  return letras.length > MAXIMO ? `${letras.slice(0, MAXIMO - 1).join('')}…` : limpio;
 }
 
 export function resumenEjercicio({ series, reps, descanso }: DatosResumen): string {
