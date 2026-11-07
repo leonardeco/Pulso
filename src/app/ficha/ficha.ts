@@ -107,7 +107,8 @@ export class Ficha {
     if (copia) this.mostrarRutina(copia);
   }
 
-  nuevaRutina() {
+  nuevaRutina(evento: MouseEvent) {
+    if (evento.detail > 1) return;
     const cliente = this.cliente();
     if (!cliente) return;
     this.mostrarRutina(this.pulso.nuevaRutina(cliente.id));
