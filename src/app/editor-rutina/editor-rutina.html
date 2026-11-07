@@ -52,115 +52,164 @@
       @if (ejercicioAqui(r.id, dia.id, j)) {
         <ng-container [ngTemplateOutlet]="filaQuitado" />
       }
-      <div class="ejercicio" [attr.data-id]="ejercicio.id">
-        @if (foto(ejercicio.nombre); as src) {
-          @if (ejercicio.imagen !== false) {
-            <img class="foto-ejercicio" [src]="src" [alt]="ejercicio.nombre" />
-          }
+      @let abierta = abierto() === ejercicio.id;
+      <div class="ejercicio" [class.abierto]="abierta" [attr.data-id]="ejercicio.id">
+        <div class="ejercicio-cabecera">
           <button
             type="button"
-            class="texto"
-            (click)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { imagen: ejercicio.imagen === false })"
+            class="ejercicio-resumen"
+            [attr.aria-expanded]="abierta"
+            [attr.aria-controls]="'cuerpo-' + ejercicio.id"
+            (click)="alternar(ejercicio.id)"
           >
-            {{ ejercicio.imagen === false ? 'Poner imagen' : 'Quitar imagen' }}
+            <span class="ejercicio-textos">
+              <span class="ejercicio-nombre">{{ nombreVisible(ejercicio.nombre) }}</span>
+              <span class="ejercicio-datos">{{ resumen(ejercicio) }}</span>
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+              <path d="M7.4 9.6 12 14.2l4.6-4.6L18 11l-6 6-6-6z" fill="currentColor" />
+            </svg>
           </button>
-        }
-        <label>
-          Ejercicio
-          <input
-            [value]="ejercicio.nombre"
-            (input)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { nombre: texto($event) })"
-          />
-        </label>
-        <div class="tres">
-          <label>
-            Series
-            <input
-              [value]="ejercicio.series"
-              (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { series: texto($event) })"
-            />
-          </label>
-          <label>
-            Reps
-            <input
-              [value]="ejercicio.reps"
-              (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { reps: texto($event) })"
-            />
-          </label>
-          <label>
-            Descanso
-            <input
-              [value]="ejercicio.descanso"
-              (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { descanso: texto($event) })"
-            />
-          </label>
-        </div>
-        <div class="botones orden">
           <button
             type="button"
-            class="orden-boton"
+            class="orden-boton orden-icono"
             data-orden="subir"
             [disabled]="j === 0"
             [attr.aria-label]="'Subir ' + nombreEjercicio(ejercicio.nombre)"
             (click)="mover(r.id, dia.id, ejercicio, -1)"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
               <path d="M12 5l7 7-1.4 1.4L13 8.8V19h-2V8.8l-4.6 4.6L5 12z" fill="currentColor" />
             </svg>
-            Subir
           </button>
           <button
             type="button"
-            class="orden-boton"
+            class="orden-boton orden-icono"
             data-orden="bajar"
             [disabled]="j === dia.ejercicios.length - 1"
             [attr.aria-label]="'Bajar ' + nombreEjercicio(ejercicio.nombre)"
             (click)="mover(r.id, dia.id, ejercicio, 1)"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
               <path d="M12 19l-7-7 1.4-1.4L11 15.2V5h2v10.2l4.6-4.6L19 12z" fill="currentColor" />
             </svg>
-            Bajar
           </button>
-          <button
-            type="button"
-            class="orden-boton"
-            [attr.aria-label]="'Duplicar ' + nombreEjercicio(ejercicio.nombre)"
-            (click)="duplicarEjercicio(r.id, dia.id, ejercicio)"
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-              <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor" />
-            </svg>
-            Duplicar
-          </button>
-          @if (r.dias.length > 1) {
-            <select
-              #destino
-              class="mover-dia"
-              data-orden="dia"
-              [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' a otro día'"
-            >
-              <option value="" selected>Mover al día…</option>
-              @for (destino of r.dias; track destino.id) {
-                @if (destino.id !== dia.id) {
-                  <option [value]="destino.id">{{ destino.nombre.trim() || 'Día sin nombre' }}</option>
-                }
+        </div>
+        <div class="ejercicio-cuerpo" [id]="'cuerpo-' + ejercicio.id">
+          @if (abierta) {
+            @if (foto(ejercicio.nombre); as src) {
+              @if (ejercicio.imagen !== false) {
+                <img class="foto-ejercicio" [src]="src" [alt]="ejercicio.nombre" />
               }
-            </select>
+              <button
+                type="button"
+                class="texto"
+                (click)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { imagen: ejercicio.imagen === false })"
+              >
+                {{ ejercicio.imagen === false ? 'Poner imagen' : 'Quitar imagen' }}
+              </button>
+            }
+            <label>
+              Ejercicio
+              <input
+                [value]="ejercicio.nombre"
+                (input)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { nombre: texto($event) })"
+              />
+            </label>
+            <div class="tres">
+              <label>
+                Series
+                <input
+                  inputmode="numeric"
+                  [value]="ejercicio.series"
+                  (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { series: texto($event) })"
+                />
+              </label>
+              <label>
+                Reps
+                <input
+                  #reps
+                  [value]="ejercicio.reps"
+                  (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { reps: texto($event) })"
+                />
+              </label>
+              <label>
+                Descanso
+                <input
+                  #descanso
+                  [value]="ejercicio.descanso"
+                  (change)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { descanso: texto($event) })"
+                />
+              </label>
+            </div>
+            <div class="atajos" role="group" [attr.aria-label]="'Atajos de ' + nombreEjercicio(ejercicio.nombre)">
+              @for (valor of ['8-12', 'AMRAP']; track valor) {
+                <button
+                  type="button"
+                  class="atajo"
+                  [attr.aria-label]="'Reps ' + valor + ' en ' + nombreEjercicio(ejercicio.nombre)"
+                  (click)="atajo(reps, valor, r.id, dia.id, ejercicio.id, 'reps')"
+                >
+                  {{ valor }}
+                </button>
+              }
+              @for (valor of ['60s', '90s']; track valor) {
+                <button
+                  type="button"
+                  class="atajo"
+                  [attr.aria-label]="'Descanso ' + valor + ' en ' + nombreEjercicio(ejercicio.nombre)"
+                  (click)="atajo(descanso, valor, r.id, dia.id, ejercicio.id, 'descanso')"
+                >
+                  {{ valor }}
+                </button>
+              }
+            </div>
+            <div class="botones orden">
+              <button
+                type="button"
+                class="orden-boton"
+                [attr.aria-label]="'Duplicar ' + nombreEjercicio(ejercicio.nombre)"
+                (click)="duplicarEjercicio(r.id, dia.id, ejercicio)"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                  <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor" />
+                </svg>
+                Duplicar
+              </button>
+              @if (r.dias.length > 1) {
+                <select
+                  #destino
+                  class="mover-dia"
+                  data-orden="dia"
+                  [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' a otro día'"
+                >
+                  <option value="" selected>Mover al día…</option>
+                  @for (destino of r.dias; track destino.id) {
+                    @if (destino.id !== dia.id) {
+                      <option [value]="destino.id">{{ destino.nombre.trim() || 'Día sin nombre' }}</option>
+                    }
+                  }
+                </select>
+                <button
+                  type="button"
+                  class="orden-boton"
+                  data-orden="mover"
+                  [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' al día elegido'"
+                  (click)="moverADia(destino, r.id, dia.id, ejercicio)"
+                >
+                  Mover
+                </button>
+              }
+            </div>
             <button
               type="button"
-              class="orden-boton"
-              data-orden="mover"
-              [attr.aria-label]="'Mover ' + nombreEjercicio(ejercicio.nombre) + ' al día elegido'"
-              (click)="moverADia(destino, r.id, dia.id, ejercicio)"
+              class="texto peligro"
+              (click)="quitarEjercicio($event, r.id, dia.id, ejercicio.id)"
             >
-              Mover
+              Quitar ejercicio
             </button>
           }
         </div>
-        <button type="button" class="texto peligro" (click)="quitar($event, () => pulso.quitarEjercicio(r.id, dia.id, ejercicio.id))">
-          Quitar ejercicio
-        </button>
       </div>
     }
     @if (ejercicioAlFinal(r.id, dia.id, dia.ejercicios.length)) {

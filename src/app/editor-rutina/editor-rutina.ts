@@ -5,6 +5,7 @@ import { imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '..
 import { PulsoService } from '../pulso.service';
 import { abrirPdf, htmlRutinas } from '../exportar';
 import { SelectorEjercicio } from '../selector-ejercicio/selector-ejercicio';
+import { resumenEjercicio } from '../resumen-ejercicio';
 
 @Component({
   selector: 'app-editor-rutina',
@@ -24,6 +25,7 @@ export class EditorRutina implements OnInit {
   private readonly btnDeshacer = viewChild<ElementRef<HTMLButtonElement>>('btnDeshacer');
   private readonly ancla = viewChild<ElementRef<HTMLElement>>('ancla');
   readonly anuncio = signal('');
+  readonly abierto = signal<string | null>(null);
   readonly selector = signal<{ rutinaId: string; diaId: string; boton: HTMLElement } | null>(null);
   private hayFila = false;
   private devolviendo = false;
@@ -129,6 +131,28 @@ export class EditorRutina implements OnInit {
     return nombre.trim() || 'ejercicio sin nombre';
   }
 
+  alternar(id: string) {
+    this.abierto.set(this.abierto() === id ? null : id);
+  }
+
+  resumen(ejercicio: Ejercicio): string {
+    return resumenEjercicio(ejercicio);
+  }
+
+  nombreVisible(nombre: string): string {
+    return nombre.trim() || 'Ejercicio sin nombre';
+  }
+
+  atajo(campo: HTMLInputElement, valor: string, rutinaId: string, diaId: string, id: string, clave: 'reps' | 'descanso') {
+    campo.value = valor;
+    this.pulso.cambiarEjercicio(rutinaId, diaId, id, { [clave]: valor });
+  }
+
+  quitarEjercicio(evento: MouseEvent, rutinaId: string, diaId: string, id: string) {
+    if (this.abierto() === id) this.abierto.set(null);
+    this.quitar(evento, () => this.pulso.quitarEjercicio(rutinaId, diaId, id));
+  }
+
   private enfocarCampo(id: string) {
     afterNextRender(
       () => {
@@ -154,6 +178,7 @@ export class EditorRutina implements OnInit {
       return;
     }
     this.anunciar(`${this.nombreEjercicio(nombre)} agregado`);
+    this.abierto.set(id);
     this.enfocarCampo(id);
   }
 
@@ -181,6 +206,7 @@ export class EditorRutina implements OnInit {
     const id = this.pulso.duplicarEjercicio(rutinaId, diaId, ejercicio.id);
     if (!id) return;
     this.anunciar(`${this.nombreEjercicio(ejercicio.nombre)} duplicado`);
+    this.abierto.set(id);
     this.enfocarCampo(id);
   }
 
@@ -204,6 +230,7 @@ export class EditorRutina implements OnInit {
     const resultado = this.pulso.moverEjercicio(rutinaId, diaId, ejercicio.id, delta);
     if (!resultado) return;
     this.anunciarMovido(ejercicio, resultado);
+    this.abierto.set(ejercicio.id);
     const preferido = delta < 0 ? 'subir' : 'bajar';
     const otro = delta < 0 ? 'bajar' : 'subir';
     afterNextRender(
@@ -225,6 +252,7 @@ export class EditorRutina implements OnInit {
     const resultado = this.pulso.moverEjercicioADia(rutinaId, diaId, ejercicio.id, destino);
     if (!resultado) return;
     this.anunciarMovido(ejercicio, resultado);
+    this.abierto.set(ejercicio.id);
     afterNextRender(
       () => {
         const fila = this.anfitrion.nativeElement.querySelector(`[data-id="${CSS.escape(ejercicio.id)}"]`);
