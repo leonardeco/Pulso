@@ -11,7 +11,7 @@ const rutina = (nombreEjercicio: string): Rutina => ({
     {
       id: 'd1',
       nombre: 'Lunes',
-      ejercicios: [{ id: 'e1', nombre: nombreEjercicio, series: '3', reps: '10', descanso: '60s', imagen: false }],
+      ejercicios: [{ id: 'e1', nombre: nombreEjercicio, series: '3', reps: '10', descanso: '60s' }],
     },
   ],
 });
@@ -22,6 +22,13 @@ describe('htmlRutinas', () => {
     expect(html).toContain('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
     expect(html).not.toContain('<img src=x');
     expect(html).not.toContain('onerror="alert(1)"');
+  });
+
+  it('no emite ninguna imagen para ningún ejercicio, ni siquiera uno con el campo antiguo imagen', () => {
+    const conCampoAntiguo = rutina('Sentadilla');
+    Object.assign(conCampoAntiguo.dias[0].ejercicios[0], { imagen: true });
+    const html = htmlRutinas('Ana', [conCampoAntiguo, rutina('Plancha'), rutina('Press banca')]);
+    expect(html).not.toContain('<img');
   });
 
   it('conserva un nombre sin caracteres especiales tal cual', () => {

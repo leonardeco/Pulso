@@ -84,7 +84,7 @@ type RutinaServidor = {
   precio: number;
   dias: {
     nombre: string;
-    ejercicios: { nombre: string; series: string; reps: string; descanso: string; imagen?: boolean }[];
+    ejercicios: { nombre: string; series: string; reps: string; descanso: string }[];
   }[];
 };
 
@@ -220,30 +220,17 @@ test('agregar y quitar un día actualiza la lista y se guarda', async ({ browser
   await a.close();
 });
 
-test('Sentadilla muestra su foto y un nombre desconocido no', async ({ browser }) => {
+test('Sentadilla no muestra ninguna imagen en la fila abierta', async ({ browser }) => {
   const a = await dispositivo(browser);
   const pa = await a.newPage();
   await registrar(pa, correo('ed4'));
-  await crearRutina(pa, 'Rutina con fotos');
+  await crearRutina(pa, 'Rutina sin fotos');
 
   const editor = pa.locator('app-editor-rutina');
   await agregarEjercicio(editor, 'Sentadilla');
-  const foto = editor.locator('img.foto-ejercicio');
   await expect(editor.getByLabel('Ejercicio', { exact: true })).toHaveValue('Sentadilla');
-  await expect(foto).toHaveCount(1);
-  await expect(foto).toHaveAttribute('alt', 'Sentadilla');
-  await expect.poll(() => foto.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
-
-  await editor.getByRole('button', { name: 'Quitar imagen' }).click();
-  await expect(foto).toHaveCount(0);
-  await expect(editor.getByRole('button', { name: 'Poner imagen' })).toBeVisible();
-  await editor.getByRole('button', { name: 'Poner imagen' }).click();
-  await expect(foto).toHaveCount(1);
-
-  await editor.getByLabel('Ejercicio', { exact: true }).fill('Ejercicio inventado');
-  await expect(foto).toHaveCount(0);
-  await expect(editor.getByRole('button', { name: 'Quitar imagen' })).toHaveCount(0);
-  await expect(editor.getByRole('button', { name: 'Poner imagen' })).toHaveCount(0);
+  await expect(editor.locator('.ejercicio img')).toHaveCount(0);
+  await expect(editor.locator('img')).toHaveCount(0);
   await a.close();
 });
 

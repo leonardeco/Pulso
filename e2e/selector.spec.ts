@@ -401,25 +401,6 @@ test('arrastrar una selección de texto desde el buscador hasta soltar sobre el 
   await ctx.close();
 });
 
-test('un nombre creado con una falta y corregido después muestra la foto del ejercicio', async ({ browser }) => {
-  const ctx = await dispositivo(browser);
-  const page = await ctx.newPage();
-  await registrar(page, correo('se14'));
-  const editor = await crearRutina(page, 'Rutina de corrección');
-
-  await agregarEjercicio(editor, 'Sentadila');
-  const campo = editor.getByLabel('Ejercicio', { exact: true });
-  await expect(campo).toHaveValue('Sentadila');
-  await expect(editor.locator('img.foto-ejercicio')).toHaveCount(0);
-
-  await campo.fill('Sentadilla');
-  const foto = editor.locator('img.foto-ejercicio');
-  await expect(foto).toBeVisible();
-  await expect(foto).toHaveAttribute('alt', 'Sentadilla');
-  await expect.poll(() => foto.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
-  await ctx.close();
-});
-
 test('Enter con la búsqueda vacía no inserta nada y la hoja sigue abierta', async ({ browser }) => {
   const ctx = await dispositivo(browser);
   const page = await ctx.newPage();

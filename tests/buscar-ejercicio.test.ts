@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EJERCICIOS, imagenEjercicio, Rutina } from '../src/app/modelos';
+import { EJERCICIOS, Rutina } from '../src/app/modelos';
 import { ALIAS, buscarEjercicios, normalizar, recientes } from '../src/app/buscar-ejercicio';
 
 const catalogoConEne = [...EJERCICIOS, 'Curl de muñeca'];
@@ -208,17 +208,5 @@ describe('buscarEjercicios', () => {
       resultados: [],
       crear: 'zzzz',
     });
-  });
-});
-
-describe('imagenEjercicio', () => {
-  it('no devuelve foto para nombres que coinciden con propiedades de los objetos', () => {
-    for (const nombre of ['constructor', '__proto__', 'toString', 'valueOf']) {
-      expect(imagenEjercicio(nombre)).toBe('');
-    }
-  });
-
-  it('devuelve la foto de un ejercicio del catálogo', () => {
-    expect(imagenEjercicio('Plancha')).toBe('ejercicios/plancha.jpg');
   });
 });
