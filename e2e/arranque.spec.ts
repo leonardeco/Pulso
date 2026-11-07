@@ -3,8 +3,6 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 
 const BASE = 'http://127.0.0.1:4300';
 const CLAVE = 'clave-larga-123';
-// Interacciones (clics y escrituras) que cuesta hoy tener una rutina creada con un cliente nuevo pasando por /rutinas.
-const LINEA_BASE_INTERACCIONES = 12;
 let contador = 0;
 
 function correo(prefijo: string): string {
@@ -36,7 +34,10 @@ async function registrar(page: Page, mail: string): Promise<void> {
   const crear = page.getByRole('button', { name: 'Crear cuenta' });
   await escribirClave(page.locator('input[name=clave]'), CLAVE, page.locator('input[name=confirma]'));
   await escribirClave(page.locator('input[name=confirma]'), CLAVE, crear);
+  // Tras registrarse la app carga el estudio; actuar antes de que llegue haría que esa carga pise lo recién creado.
+  const cargado = page.waitForResponse((r) => r.url().includes('/api/estudio') && r.request().method() === 'GET');
   await crear.click();
+  await cargado;
   await expect(page.getByRole('link', { name: 'Clientes', exact: true })).toBeVisible();
 }
 
@@ -142,6 +143,7 @@ test('la rutina nueva queda a la vista con el foco en Nombre de la rutina aunque
 
   await abrirFichaRutina(page, 'Cliente Con Rutina Larga');
   await expect(page.locator('app-editor-rutina')).toHaveCount(1);
+  const scrollAntes = await page.evaluate(() => window.scrollY);
   await nuevaRutina(page).click();
 
   await expect(page.locator('app-editor-rutina')).toHaveCount(2);
@@ -150,7 +152,11 @@ test('la rutina nueva queda a la vista con el foco en Nombre de la rutina aunque
   const campoNombre = nombreDe(page, nueva?.id ?? 'sin-id');
   await expect(campoNombre).toHaveValue('Rutina nueva');
   await expect(campoNombre).toBeFocused();
-  await expect(campoNombre).toBeInViewport();
+  // El desplazamiento es suave: se espera a que la página llegue hasta la rutina nueva.
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { message: 'la página debe desplazarse hasta la rutina nueva' })
+    .not.toBe(scrollAntes);
+  await expect(campoNombre).toBeInViewport({ ratio: 1 });
   await expect(pestanaRutina(page)).toHaveClass(/activa/);
   await ctx.close();
 });
@@ -208,6 +214,123 @@ test('un cliente sin rutinas muestra el estado vacío con la acción y deja de m
   await ctx.close();
 });
 
+test('el botón de Nueva rutina vacío se desmonta al pulsarlo y el campo Nombre de la rutina de la rutina nueva recibe el foco', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('arr8'));
+  await crearCliente(page, 'Cliente Para El Foco');
+  await page.getByRole('button', { name: 'Rutina', exact: true }).click();
+  const vacio = page.locator('.estado-vacio');
+  await expect(vacio).toBeVisible();
+
+  await vacio.getByRole('button', { name: 'Nueva rutina', exact: true }).click();
+
+  await expect(vacio).toHaveCount(0);
+  await expect.poll(async () => (await rutinasEnServidor(ctx)).length).toBe(1);
+  const nueva = (await rutinasEnServidor(ctx))[0];
+  const campoNombre = nombreDe(page, nueva?.id ?? 'sin-id');
+  await expect(campoNombre).toHaveValue('Rutina nueva');
+  await expect(campoNombre).toBeFocused();
+  await ctx.close();
+});
+
+test('un doble clic en Nueva rutina crea una sola rutina más y con el teclado también se crea una', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('arr9'));
+  await crearCliente(page, 'Cliente Del Doble Clic');
+  const clienteId = idDeCliente(page);
+  await crearRutina(page, ctx, 'Rutina previa', 'Cliente Del Doble Clic');
+  await abrirFichaRutina(page, 'Cliente Del Doble Clic');
+  await expect(page.locator('app-editor-rutina')).toHaveCount(1);
+  const delCliente = async (): Promise<string[]> =>
+    (await rutinasEnServidor(ctx)).filter((r) => r.clienteId === clienteId).map((r) => r.nombre);
+
+  await nuevaRutina(page).dblclick();
+
+  await expect.poll(delCliente).toEqual(['Rutina previa', 'Rutina nueva']);
+  await expect(page.locator('app-editor-rutina')).toHaveCount(2);
+  // Si el segundo clic llegara a crear otra, aparecería poco después de la primera.
+  await page.waitForTimeout(1000);
+  expect(await delCliente()).toEqual(['Rutina previa', 'Rutina nueva']);
+  await expect(page.locator('app-editor-rutina')).toHaveCount(2);
+
+  // Con el teclado no hay segundo clic: Enter sobre el botón crea una rutina.
+  await nuevaRutina(page).focus();
+  await nuevaRutina(page).press('Enter');
+
+  await expect.poll(delCliente).toEqual(['Rutina previa', 'Rutina nueva', 'Rutina nueva']);
+  await expect(page.locator('app-editor-rutina')).toHaveCount(3);
+  await ctx.close();
+});
+
+type MedidaBoton = { fondo: string; texto: string; degradado: string; contraste: number };
+
+// Lee el botón y calcula el contraste entre su texto y su fondo efectivo (mezcla los fondos translúcidos con los de sus ancestros).
+async function medirBoton(boton: Locator): Promise<MedidaBoton> {
+  return boton.evaluate((el) => {
+    type Color = [number, number, number, number];
+    const leer = (valor: string): Color => {
+      const numeros = (valor.match(/-?\d*\.?\d+(?:e-?\d+)?%?/g) ?? []).map((n) =>
+        n.endsWith('%') ? parseFloat(n) / 100 : parseFloat(n),
+      );
+      if (valor.startsWith('color(')) {
+        const [r = 0, g = 0, b = 0, a = 1] = numeros;
+        return [r * 255, g * 255, b * 255, a];
+      }
+      const [r = 0, g = 0, b = 0, a = 1] = numeros;
+      return [r, g, b, a];
+    };
+    const sobre = (frente: Color, atras: Color): Color => {
+      const alfa = frente[3] + atras[3] * (1 - frente[3]);
+      if (alfa === 0) return [0, 0, 0, 0];
+      const canal = (i: 0 | 1 | 2): number => (frente[i] * frente[3] + atras[i] * atras[3] * (1 - frente[3])) / alfa;
+      return [canal(0), canal(1), canal(2), alfa];
+    };
+    const lineal = (c: number): number => {
+      const v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const luz = (c: Color): number => 0.2126 * lineal(c[0]) + 0.7152 * lineal(c[1]) + 0.0722 * lineal(c[2]);
+
+    let fondo: Color = [0, 0, 0, 0];
+    for (let nodo: Element | null = el; nodo; nodo = nodo.parentElement) {
+      fondo = sobre(fondo, leer(getComputedStyle(nodo).backgroundColor));
+      if (fondo[3] >= 1) break;
+    }
+    fondo = sobre(fondo, [255, 255, 255, 1]);
+    const estilo = getComputedStyle(el);
+    const texto = sobre(leer(estilo.color), fondo);
+    const claro = Math.max(luz(fondo), luz(texto));
+    const oscuro = Math.min(luz(fondo), luz(texto));
+    return {
+      fondo: estilo.backgroundColor,
+      texto: estilo.color,
+      degradado: estilo.backgroundImage,
+      contraste: (claro + 0.05) / (oscuro + 0.05),
+    };
+  });
+}
+
+test('el botón Nueva rutina del estado vacío no lleva degradado y su texto contrasta al menos 4.5 en el tema oscuro y en el claro', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('arr10'));
+  await crearCliente(page, 'Cliente Del Contraste');
+  await page.getByRole('button', { name: 'Rutina', exact: true }).click();
+  const boton = page.locator('.estado-vacio').getByRole('button', { name: 'Nueva rutina', exact: true });
+  await expect(boton).toBeVisible();
+
+  for (const tema of ['oscuro', 'claro']) {
+    await page.evaluate((valor) => document.documentElement.setAttribute('data-tema', valor), tema);
+    await expect(page.locator('html')).toHaveAttribute('data-tema', tema);
+    const medida = await medirBoton(boton);
+    expect(medida.degradado, `fondo en tema ${tema}`).toBe('none');
+    expect(medida.contraste, `contraste en tema ${tema}: texto ${medida.texto} sobre ${medida.fondo}`).toBeGreaterThanOrEqual(4.5);
+  }
+  await ctx.close();
+});
+
 test('el título de una plantilla en rutinas no repite la palabra Plantilla', async ({ browser }) => {
   const ctx = await dispositivo(browser);
   const page = await ctx.newPage();
@@ -248,10 +371,11 @@ test('el botón del acordeón en rutinas anuncia aria-expanded y cambia al abrir
   await ctx.close();
 });
 
-test('desde un cliente nuevo hasta tener la rutina creada con él hacen falta menos interacciones que las 12 de pasar por rutinas', async ({ browser }, info) => {
+// Cuenta cada clic, escritura o elección que hace falta desde un cliente recién registrado hasta tener la rutina creada con él.
+async function contarInteracciones(browser: Browser, camino: 'ficha' | 'rutinas'): Promise<number> {
   const ctx = await dispositivo(browser);
   const page = await ctx.newPage();
-  await registrar(page, correo('arr7'));
+  await registrar(page, correo(`arr-${camino}`));
 
   let interacciones = 0;
   const clic = async (destino: Locator): Promise<void> => {
@@ -262,6 +386,10 @@ test('desde un cliente nuevo hasta tener la rutina creada con él hacen falta me
     interacciones += 1;
     await destino.fill(valor);
   };
+  const elegir = async (destino: Locator, etiqueta: string): Promise<void> => {
+    interacciones += 1;
+    await destino.selectOption({ label: etiqueta });
+  };
 
   await clic(page.getByRole('link', { name: 'Clientes', exact: true }));
   await clic(page.getByRole('button', { name: 'Nuevo' }));
@@ -270,16 +398,30 @@ test('desde un cliente nuevo hasta tener la rutina creada con él hacen falta me
   await clic(page.getByRole('button', { name: 'Guardar cliente' }));
   await expect(page).toHaveURL(/\/clientes\/[^/]+$/);
   const clienteId = idDeCliente(page);
-  await clic(page.getByRole('button', { name: 'Rutina', exact: true }));
-  await clic(nuevaRutina(page));
+
+  if (camino === 'ficha') {
+    await clic(page.getByRole('button', { name: 'Rutina', exact: true }));
+    await clic(nuevaRutina(page));
+  } else {
+    await clic(page.locator('nav.nav').getByRole('link', { name: 'Rutina', exact: true }));
+    await elegir(page.locator('select[name=cliente]'), 'Cliente Contado');
+    await clic(page.getByRole('button', { name: 'Crear rutina' }));
+  }
 
   await expect(page.locator('app-editor-rutina')).toHaveCount(1);
   await expect
     .poll(async () => (await rutinasEnServidor(ctx)).map((r) => r.clienteId))
     .toEqual([clienteId]);
-
-  console.log(`Interacciones por la ficha: ${interacciones} (línea base por rutinas: ${LINEA_BASE_INTERACCIONES})`);
-  info.annotations.push({ type: 'interacciones', description: String(interacciones) });
-  expect(interacciones).toBeLessThan(LINEA_BASE_INTERACCIONES);
   await ctx.close();
+  return interacciones;
+}
+
+test('crear la rutina de un cliente nuevo desde su ficha cuesta menos interacciones medidas que hacerlo por rutinas', async ({ browser }, info) => {
+  const porRutinas = await contarInteracciones(browser, 'rutinas');
+  const porFicha = await contarInteracciones(browser, 'ficha');
+
+  console.log(`Interacciones medidas: por la ficha ${porFicha}, por rutinas ${porRutinas}`);
+  info.annotations.push({ type: 'interacciones por la ficha', description: String(porFicha) });
+  info.annotations.push({ type: 'interacciones por rutinas', description: String(porRutinas) });
+  expect(porFicha, `por la ficha ${porFicha}, por rutinas ${porRutinas}`).toBeLessThan(porRutinas);
 });
