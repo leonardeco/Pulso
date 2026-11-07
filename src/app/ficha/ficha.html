@@ -129,8 +129,11 @@
     @if (pestana === 'rutina') {
       <div class="fila-titulo">
         <h2>Rutinas</h2>
-        <a class="texto" routerLink="/rutinas">Crear en Rutina</a>
+        @if (rutinas().length > 0) {
+          <button type="button" class="secundario nueva-rutina" (click)="nuevaRutina()">Nueva rutina</button>
+        }
       </div>
+      <a class="texto" routerLink="/rutinas">Crear en Rutina</a>
       @if (plantillas().length > 0) {
         <label>
           Copiar plantilla
@@ -143,7 +146,10 @@
         </label>
       }
       @if (rutinas().length === 0) {
-        <p class="vacio">Este cliente todavía no tiene rutina.</p>
+        <div class="estado-vacio">
+          <p class="vacio">Este cliente todavía no tiene rutina.</p>
+          <button type="button" class="primario nueva-rutina" (click)="nuevaRutina()">Nueva rutina</button>
+        </div>
       }
       @for (rutina of rutinas(); track rutina.id) {
         <article class="tarjeta">

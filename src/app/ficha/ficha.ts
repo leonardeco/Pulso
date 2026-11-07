@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, Injector, afterNextRender, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -16,6 +16,7 @@ import { EditorRutina } from '../editor-rutina/editor-rutina';
 })
 export class Ficha {
   readonly pulso = inject(PulsoService);
+  private readonly injector = inject(Injector);
   readonly modalidades = MODALIDADES;
   readonly nombreModalidad = nombreModalidad;
   readonly claveAbierta = signal(false);
@@ -101,8 +102,28 @@ export class Ficha {
     const id = this.texto(evento);
     const cliente = this.cliente();
     if (!id || !cliente) return;
-    this.pulso.copiarRutina(id, cliente.id);
+    const copia = this.pulso.copiarRutina(id, cliente.id);
     (evento.target as HTMLSelectElement).value = '';
+    if (copia) this.mostrarRutina(copia);
+  }
+
+  nuevaRutina() {
+    const cliente = this.cliente();
+    if (!cliente) return;
+    this.mostrarRutina(this.pulso.nuevaRutina(cliente.id));
+  }
+
+  private mostrarRutina(id: string) {
+    afterNextRender(
+      () => {
+        const etiqueta = document.querySelector<HTMLElement>(`label[data-id="${CSS.escape(id)}"]`);
+        if (!etiqueta) return;
+        const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        etiqueta.scrollIntoView({ behavior: sinMovimiento ? 'auto' : 'smooth', block: 'center' });
+        etiqueta.querySelector('input')?.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
   }
 
   tarifa(campo: 'mensualidad' | 'valoracionMensual', evento: Event) {

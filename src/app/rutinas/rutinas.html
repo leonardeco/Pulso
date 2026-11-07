@@ -33,12 +33,14 @@
 
   @for (rutina of pulso.estado().rutinas; track rutina.id) {
     <article class="tarjeta">
-      <button type="button" class="fila estatica" (click)="alternar(rutina.id)">
+      <button type="button" class="fila estatica" [attr.aria-expanded]="abierta() === rutina.id" (click)="alternar(rutina.id)">
         <span>
           <strong>{{ rutina.nombre }}</strong>
           <small>
             {{ nombreCliente(rutina.clienteId) }}
-            · {{ modalidadCliente(rutina.clienteId) }}
+            @if (rutina.clienteId) {
+              · {{ modalidadCliente(rutina.clienteId) }}
+            }
             · {{ pesos(rutina.precio || 0) }}
             · {{ rutina.dias.length }} {{ rutina.dias.length === 1 ? 'día' : 'días' }}
           </small>
