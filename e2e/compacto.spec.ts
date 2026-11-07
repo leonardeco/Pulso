@@ -56,9 +56,22 @@ const datosEnServidor = async (ctx: BrowserContext): Promise<string[][]> =>
 const ordenEnServidor = async (ctx: BrowserContext): Promise<string[][]> =>
   ((await rutinasEnServidor(ctx))[0]?.dias ?? []).map((d) => d.ejercicios.map((e) => e.nombre));
 
-async function crearRutina(page: Page, ctx: BrowserContext, nombre: string): Promise<Locator> {
+async function crearCliente(page: Page, nombre: string): Promise<void> {
+  await page.goto('/clientes');
+  await page.getByRole('button', { name: 'Nuevo' }).click();
+  await page.locator('input[name=nombre]').fill(nombre);
+  await page.locator('input[name=telefono]').fill(`300${Date.now().toString().slice(-7)}`);
+  const guardado = page.waitForResponse(
+    (r) => r.url().endsWith('/api/estudio') && r.request().method() === 'PUT' && r.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Guardar cliente' }).click();
+  await guardado;
+}
+
+async function crearRutina(page: Page, ctx: BrowserContext, nombre: string, cliente = ''): Promise<Locator> {
   await page.goto('/rutinas');
   await page.locator('input[name=nombre]').fill(nombre);
+  if (cliente) await page.locator('select[name=cliente]').selectOption({ label: cliente });
   await page.getByRole('button', { name: 'Crear rutina' }).click();
   const editor = page.locator('app-editor-rutina');
   await expect(editor).toBeVisible();
@@ -386,5 +399,180 @@ test('un ejercicio sin series, reps ni descanso no muestra undefined en su resum
   await expect(resumenDe(ejercicio)).toHaveText('Sin datos');
   await expect(cabecera).not.toHaveAccessibleName(/undefined|null|NaN/);
   await expect(cabecera).toHaveAccessibleName('Plancha Sin datos');
+  await ctx.close();
+});
+
+test('lo escrito en Series sin salir del campo se guarda al abrir otra fila y se ve en el resumen', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp11'));
+  const editor = await crearRutina(page, ctx, 'Rutina con valor a medias');
+  await ponerEjercicios(editor, ['Press banca', 'Remo con barra']);
+
+  const ejercicios = editor.locator('.dia-rutina').first().locator('.ejercicio');
+  const primero = await abrirEjercicio(ejercicios.nth(0));
+  await campo(primero, 'Series').fill('5');
+  await expect(campo(primero, 'Series')).toBeFocused();
+  // dispatchEvent no mueve el foco: el valor sigue a medio escribir cuando se activa la otra cabecera.
+  await cabeceraDe(ejercicios.nth(1)).dispatchEvent('click');
+
+  await expect(cabeceraDe(ejercicios.nth(1))).toHaveAttribute('aria-expanded', 'true');
+  await expect(cabeceraDe(ejercicios.nth(0))).toHaveAttribute('aria-expanded', 'false');
+  await expect(resumenDe(ejercicios.nth(0))).toHaveText('5 × 10 · 60s');
+  await expect.poll(() => datosEnServidor(ctx)).toEqual([
+    ['5', '10', '60s'],
+    ['3', '10', '60s'],
+  ]);
+  await ctx.close();
+});
+
+test('duplicar con Series a medio escribir lleva el valor a la copia', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp12'));
+  const editor = await crearRutina(page, ctx, 'Rutina para duplicar a medias');
+  await ponerEjercicios(editor, ['Press banca']);
+
+  const ejercicios = editor.locator('.dia-rutina').first().locator('.ejercicio');
+  const original = await abrirEjercicio(ejercicios.nth(0));
+  await campo(original, 'Series').fill('5');
+  await expect(campo(original, 'Series')).toBeFocused();
+  await original.getByRole('button', { name: 'Duplicar Press banca' }).dispatchEvent('click');
+
+  await expect(ejercicios).toHaveCount(2);
+  await expect(cabeceraDe(ejercicios.nth(1))).toHaveAttribute('aria-expanded', 'true');
+  await expect(campo(ejercicios.nth(1), 'Series')).toHaveValue('5');
+  await expect(resumenDe(ejercicios.nth(0))).toHaveText('5 × 10 · 60s');
+  await expect.poll(() => datosEnServidor(ctx)).toEqual([
+    ['5', '10', '60s'],
+    ['5', '10', '60s'],
+  ]);
+  await ctx.close();
+});
+
+test('en la ficha con dos rutinas solo hay una cabecera abierta en toda la página', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp13'));
+  await crearCliente(page, 'Cliente Dos Filas');
+  await crearRutina(page, ctx, 'Rutina A', 'Cliente Dos Filas');
+  await crearRutina(page, ctx, 'Rutina B', 'Cliente Dos Filas');
+
+  await page.goto('/clientes');
+  await page.getByRole('link', { name: /Cliente Dos Filas/ }).click();
+  await page.getByRole('button', { name: 'Rutina', exact: true }).click();
+  const editores = page.locator('app-editor-rutina');
+  await expect(editores).toHaveCount(2);
+  const abiertas = page.locator('button[aria-expanded=true]');
+
+  await agregarEjercicio(editores.nth(0), 'Press banca');
+  await agregarEjercicio(editores.nth(1), 'Remo con barra');
+  await expect(editores.nth(0).locator('.ejercicio')).toHaveCount(1);
+  await expect(editores.nth(1).locator('.ejercicio')).toHaveCount(1);
+  const deA = cabeceraDe(editores.nth(0).locator('.ejercicio'));
+  const deB = cabeceraDe(editores.nth(1).locator('.ejercicio'));
+  await expect(deB).toHaveAttribute('aria-expanded', 'true');
+  await expect(deA).toHaveAttribute('aria-expanded', 'false');
+  await expect(abiertas).toHaveCount(1);
+
+  await deA.click();
+  await expect(deA).toHaveAttribute('aria-expanded', 'true');
+  await expect(deB).toHaveAttribute('aria-expanded', 'false');
+  await expect(abiertas).toHaveCount(1);
+
+  await deB.click();
+  await expect(deB).toHaveAttribute('aria-expanded', 'true');
+  await expect(deA).toHaveAttribute('aria-expanded', 'false');
+  await expect(abiertas).toHaveCount(1);
+  await ctx.close();
+});
+
+test('quitar el ejercicio abierto deja todas las filas plegadas', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp14'));
+  const editor = await crearRutina(page, ctx, 'Rutina para quitar abierta');
+  await ponerEjercicios(editor, ['Press banca', 'Remo con barra', 'Peso muerto']);
+
+  const ejercicios = editor.locator('.dia-rutina').first().locator('.ejercicio');
+  const abierto = await abrirEjercicio(ejercicios.nth(1));
+  await expect(editor.locator('button[aria-expanded=true]')).toHaveCount(1);
+  await abierto.getByRole('button', { name: 'Quitar ejercicio' }).click();
+
+  await expect(editor.locator('.fila-quitado')).toHaveText(/Quitado · Remo con barra/);
+  await expect(ejercicios).toHaveCount(2);
+  await expect(editor.locator('button[aria-expanded=true]')).toHaveCount(0);
+  await expect(editor.locator('button[aria-expanded=false]')).toHaveCount(2);
+  await ctx.close();
+});
+
+test('los atajos de reps y descanso anuncian el cambio en la región viva', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp15'));
+  const editor = await crearRutina(page, ctx, 'Rutina con anuncios');
+  await ponerEjercicios(editor, ['Press banca']);
+
+  const ejercicio = await abrirEjercicio(editor.locator('.dia-rutina').first().locator('.ejercicio').first());
+  const region = editor.locator('div.sr-only[role=status]');
+  await ejercicio.getByRole('button', { name: 'Reps 8-12 en Press banca' }).click();
+  await expect(region).toHaveText('Reps 8-12 en Press banca');
+  await ejercicio.getByRole('button', { name: 'Descanso 60s en Press banca' }).click();
+  await expect(region).toHaveText('Descanso 60s en Press banca');
+  await ejercicio.getByRole('button', { name: 'Reps AMRAP en Press banca' }).click();
+  await expect(region).toHaveText('Reps AMRAP en Press banca');
+  await ejercicio.getByRole('button', { name: 'Descanso 90s en Press banca' }).click();
+  await expect(region).toHaveText('Descanso 90s en Press banca');
+  await ctx.close();
+});
+
+test('el nombre de cada fila lleva como title el nombre completo aunque se recorte', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp16'));
+  const editor = await crearRutina(page, ctx, 'Rutina con nombres largos');
+  const largo = 'Press de banca inclinado con mancuernas, agarre neutro y pausa larga';
+  await ponerEjercicios(editor, [largo, 'Dominadas']);
+
+  const ejercicios = editor.locator('.dia-rutina').first().locator('.ejercicio');
+  await expect(ejercicios.nth(0).locator('.ejercicio-nombre')).toHaveAttribute('title', largo);
+  await expect(ejercicios.nth(0).locator('.ejercicio-nombre')).toHaveText(largo);
+  await expect(ejercicios.nth(1).locator('.ejercicio-nombre')).toHaveAttribute('title', 'Dominadas');
+  await ctx.close();
+});
+
+test('Subir y Bajar mantienen abierta la fila que ya lo estaba y pliegan la anterior si mueven otra', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('cmp17'));
+  const editor = await crearRutina(page, ctx, 'Rutina con fila abierta al mover');
+  await ponerEjercicios(editor, ['Prensa', 'Extensiones', 'Curl femoral']);
+  await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Prensa', 'Extensiones', 'Curl femoral']]);
+
+  const ejercicios = editor.locator('.dia-rutina').first().locator('.ejercicio');
+  const abiertas = editor.locator('.ejercicio button[aria-expanded=true]');
+  const nombreEn = (i: number) => cabeceraDe(ejercicios.nth(i)).locator('.ejercicio-nombre');
+
+  // La fila ya estaba abierta y sube: sigue abierta y es la única.
+  await abrirEjercicio(ejercicios.nth(1));
+  await ejercicios.nth(1).locator('[data-orden=subir]').click();
+  await expect(nombreEn(0)).toHaveText('Extensiones');
+  await expect(cabeceraDe(ejercicios.nth(0))).toHaveAttribute('aria-expanded', 'true');
+  await expect(abiertas).toHaveCount(1);
+  await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Extensiones', 'Prensa', 'Curl femoral']]);
+
+  // Se mueve otra fila mientras la primera está abierta: esa se abre y la anterior se pliega.
+  await ejercicios.nth(1).locator('[data-orden=bajar]').click();
+  await expect(nombreEn(2)).toHaveText('Prensa');
+  await expect(cabeceraDe(ejercicios.nth(2))).toHaveAttribute('aria-expanded', 'true');
+  await expect(cabeceraDe(ejercicios.nth(0))).toHaveAttribute('aria-expanded', 'false');
+  await expect(abiertas).toHaveCount(1);
+
+  // La fila abierta sube y sigue abierta.
+  await ejercicios.nth(2).locator('[data-orden=subir]').click();
+  await expect(nombreEn(1)).toHaveText('Prensa');
+  await expect(cabeceraDe(ejercicios.nth(1))).toHaveAttribute('aria-expanded', 'true');
+  await expect(abiertas).toHaveCount(1);
+  await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Extensiones', 'Prensa', 'Curl femoral']]);
   await ctx.close();
 });

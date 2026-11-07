@@ -281,6 +281,8 @@ test('tras Deshacer con el teclado el foco queda dentro del ejercicio devuelto',
   const devuelto = dia.locator('.ejercicio').nth(1);
   // El foco se comprueba antes de abrir la fila devuelta, que vuelve plegada.
   await expect(devuelto.locator(':focus')).toHaveCount(1);
+  await expect(devuelto.locator('button[aria-expanded]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(editor.locator('button[aria-expanded=true]')).toHaveCount(0);
   await abrirEjercicio(devuelto);
   await expect(devuelto.getByLabel('Ejercicio', { exact: true })).toHaveValue('Aperturas');
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Press inclinado', 'Aperturas', 'Fondos en paralelas']);
