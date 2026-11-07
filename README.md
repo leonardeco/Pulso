@@ -23,7 +23,7 @@
 <p align="center">
   <img src="docs/capturas/inicio.png" alt="Inicio: el día, los conteos y la cita de hoy" width="220">
   <img src="docs/capturas/agenda.png" alt="Agenda de la semana y horario de atención" width="220">
-  <img src="docs/capturas/rutina.png" alt="Rutina con la foto del ejercicio" width="220">
+  <img src="docs/capturas/rutina.png" alt="Rutina con sus ejercicios" width="220">
   <img src="docs/capturas/clientes.png" alt="Lista de clientes" width="220">
 </p>
 
@@ -77,7 +77,7 @@ El enlace del estudio está en Inicio. La barra de abajo se queda en cinco: Inic
 | **Inicio** | El día, citas, clientes por tipo de acompañamiento, rutinas, precios y lo que falta por cobrar. |
 | **Agenda** | La semana, la cita hecha o cancelada, y el horario de atención. |
 | **Reservar** | Servicio, día y hora libre. Si el teléfono ya existe, usa ese cliente. |
-| **Rutina** | Días, ejercicios, precio y una foto si el nombre está en el catálogo. La foto se puede quitar. |
+| **Rutina** | Días, ejercicios, precio y sus ejercicios con series, repeticiones y descanso. |
 | **Clientes** | Alta, búsqueda y ficha. Cada persona es personalizada, semipersonalizada o virtual. |
 | **Comidas** | Tabla por momento del día. Es una guía del entrenador. |
 | **Pagos** | Mensualidad y valoración del mes, más un cobro suelto si hace falta. |

@@ -97,18 +97,6 @@
         </div>
         <div class="ejercicio-cuerpo" [id]="'cuerpo-' + ejercicio.id">
           @if (abierta) {
-            @if (foto(ejercicio.nombre); as src) {
-              @if (ejercicio.imagen !== false) {
-                <img class="foto-ejercicio" [src]="src" [alt]="ejercicio.nombre" />
-              }
-              <button
-                type="button"
-                class="texto"
-                (click)="pulso.cambiarEjercicio(r.id, dia.id, ejercicio.id, { imagen: ejercicio.imagen === false })"
-              >
-                {{ ejercicio.imagen === false ? 'Poner imagen' : 'Quitar imagen' }}
-              </button>
-            }
             <label>
               Ejercicio
               <input

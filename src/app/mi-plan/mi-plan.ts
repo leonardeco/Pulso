@@ -1,5 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
-import { etiquetaFecha, hoyISO, imagenEjercicio, llevaImagen, sumarDias } from '../modelos';
+import { etiquetaFecha, hoyISO, sumarDias } from '../modelos';
 import { PulsoService } from '../pulso.service';
 import { SesionService } from '../sesion.service';
 import { abrirPdf, htmlRutinas, htmlTablas } from '../exportar';
@@ -12,8 +12,6 @@ export class MiPlan {
   private readonly pulso = inject(PulsoService);
   private readonly sesion = inject(SesionService);
   readonly etiqueta = etiquetaFecha;
-  readonly foto = imagenEjercicio;
-  readonly llevaImagen = llevaImagen;
 
   readonly cliente = computed(() => {
     const id = this.sesion.actual()?.clienteId;

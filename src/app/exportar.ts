@@ -1,4 +1,4 @@
-import { imagenEjercicio, llevaImagen, type Rutina, type Tabla } from './modelos';
+import type { Rutina, Tabla } from './modelos';
 
 function esc(valor: string): string {
   return valor
@@ -6,10 +6,6 @@ function esc(valor: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function absoluto(ruta: string): string {
-  return new URL(ruta, `${location.origin}/`).href;
 }
 
 function hoja(titulo: string, cuerpo: string): string {
@@ -27,9 +23,7 @@ function hoja(titulo: string, cuerpo: string): string {
     h2 { margin: 18px 0 8px; font-size: 16px; }
     .cliente { margin: 0 0 14px; color: #5e6878; }
     .dia { margin: 0 0 8px; }
-    .item { display: grid; grid-template-columns: 108px 1fr; gap: 12px; align-items: center; margin: 0 0 12px; break-inside: avoid; }
-    .item.solo { grid-template-columns: 1fr; }
-    img { width: 108px; height: 80px; object-fit: cover; border-radius: 8px; background: #e8edf4; }
+    .item { margin: 0 0 12px; break-inside: avoid; }
     strong { display: block; }
     small { color: #5e6878; }
     table { width: 100%; border-collapse: collapse; }
@@ -48,12 +42,8 @@ export function htmlRutinas(cliente: string, rutinas: Rutina[]): string {
         .map((dia) => {
           const items = dia.ejercicios
             .map((ejercicio) => {
-              const foto = llevaImagen(ejercicio) ? imagenEjercicio(ejercicio.nombre) : '';
               const detalle = `${esc(ejercicio.series || '—')} series · ${esc(ejercicio.reps || '—')} reps · descanso ${esc(ejercicio.descanso || '—')}`;
-              if (!foto) {
-                return `<div class="item solo"><div><strong>${esc(ejercicio.nombre)}</strong><small>${detalle}</small></div></div>`;
-              }
-              return `<div class="item"><img src="${esc(absoluto(foto))}" alt="" /><div><strong>${esc(ejercicio.nombre)}</strong><small>${detalle}</small></div></div>`;
+              return `<div class="item"><strong>${esc(ejercicio.nombre)}</strong><small>${detalle}</small></div>`;
             })
             .join('');
           return `<section class="dia"><h2>${esc(dia.nombre)}</h2>${items || '<p>Sin ejercicios.</p>'}</section>`;

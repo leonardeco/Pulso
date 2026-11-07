@@ -14,7 +14,6 @@ import {
   buscarCliente,
   fechaISO,
   hoyISO,
-  imagenEjercicio,
   modalidadDe,
   periodoActual,
   uid,
@@ -778,7 +777,6 @@ export class PulsoService {
       series: anterior?.series || '3',
       reps: anterior?.reps || '10',
       descanso: anterior?.descanso || '60s',
-      ...(imagenEjercicio(limpio) !== '' ? { imagen: true } : {}),
     };
     this.estado.update((actual) => ({
       ...actual,

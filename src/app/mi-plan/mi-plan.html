@@ -43,9 +43,6 @@
               <strong>{{ dia.nombre }}</strong>
               @for (ejercicio of dia.ejercicios; track ejercicio.id) {
                 <div class="ejercicio">
-                  @if (llevaImagen(ejercicio)) {
-                    <img class="foto-ejercicio" [src]="foto(ejercicio.nombre)" [alt]="ejercicio.nombre" />
-                  }
                   <strong>{{ ejercicio.nombre }}</strong>
                   <div class="metas">
                     <div>

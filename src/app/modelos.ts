@@ -56,7 +56,6 @@ export interface Ejercicio {
   series: string;
   reps: string;
   descanso: string;
-  imagen?: boolean;
 }
 
 export interface DiaRutina {
@@ -148,48 +147,6 @@ export const EJERCICIOS = [
   'Bicicleta',
   'Movilidad de cadera',
 ];
-
-const FOTOS_EJERCICIO: Record<string, string> = {
-  sentadilla: 'ejercicios/sentadilla.jpg',
-  'sentadilla goblet': 'ejercicios/sentadilla-goblet.jpg',
-  'sentadilla bulgara': 'ejercicios/sentadilla-bulgara.jpg',
-  'peso muerto': 'ejercicios/peso-muerto.jpg',
-  'peso muerto rumano': 'ejercicios/peso-muerto-rumano.jpg',
-  'hip thrust': 'ejercicios/hip-thrust.jpg',
-  'puente de gluteo': 'ejercicios/puente-gluteo.jpg',
-  zancada: 'ejercicios/zancada.jpg',
-  prensa: 'ejercicios/prensa.jpg',
-  'elevacion de talones': 'ejercicios/elevacion-talones.jpg',
-  'press banca': 'ejercicios/press-banca.jpg',
-  'press militar': 'ejercicios/press-militar.jpg',
-  'remo con barra': 'ejercicios/remo-barra.jpg',
-  'remo en polea': 'ejercicios/remo-polea.jpg',
-  'jalon al pecho': 'ejercicios/jalon-pecho.jpg',
-  dominadas: 'ejercicios/dominadas.jpg',
-  fondos: 'ejercicios/fondos.jpg',
-  flexiones: 'ejercicios/flexiones.jpg',
-  'curl de biceps': 'ejercicios/curl-biceps.jpg',
-  'extension de triceps': 'ejercicios/extension-triceps.jpg',
-  'face pull': 'ejercicios/face-pull.jpg',
-  plancha: 'ejercicios/plancha.jpg',
-  pallof: 'ejercicios/pallof.jpg',
-  'caminata inclinada': 'ejercicios/caminata.jpg',
-  bicicleta: 'ejercicios/bicicleta.jpg',
-  'movilidad de cadera': 'ejercicios/movilidad-cadera.jpg',
-};
-
-export function imagenEjercicio(nombre: string): string {
-  const clave = nombre
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  return Object.hasOwn(FOTOS_EJERCICIO, clave) ? FOTOS_EJERCICIO[clave] : '';
-}
-
-export function llevaImagen(ejercicio: { nombre: string; imagen?: boolean }): boolean {
-  return ejercicio.imagen !== false && imagenEjercicio(ejercicio.nombre) !== '';
-}
 
 export const MOMENTOS = [
   'Desayuno',

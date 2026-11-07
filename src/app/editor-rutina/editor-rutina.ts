@@ -1,7 +1,7 @@
 import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild, type OnInit } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { imagenEjercicio, type DiaRutina, type Ejercicio, type Rutina } from '../modelos';
+import type { DiaRutina, Ejercicio, Rutina } from '../modelos';
 import { PulsoService } from '../pulso.service';
 import { abrirPdf, htmlRutinas } from '../exportar';
 import { SelectorEjercicio } from '../selector-ejercicio/selector-ejercicio';
@@ -20,7 +20,6 @@ export class EditorRutina implements OnInit {
   readonly enlaceFicha = input(false);
   readonly anuncioInicial = input('');
   readonly duplicada = output<{ id: string; texto: string }>();
-  readonly foto = imagenEjercicio;
   private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly btnDeshacer = viewChild<ElementRef<HTMLButtonElement>>('btnDeshacer');
