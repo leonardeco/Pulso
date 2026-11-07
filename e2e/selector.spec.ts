@@ -324,3 +324,219 @@ test('escribir en el buscador no retira la fila «Quitado · Deshacer» pendient
   await expect.poll(() => ejerciciosDelDia(ctx)).toEqual(['Press banca', 'Remo con barra']);
   await ctx.close();
 });
+
+async function ponerValores(ejercicio: Locator, series: string, reps: string, descanso: string): Promise<void> {
+  for (const [etiqueta, valor] of [['Series', series], ['Reps', reps], ['Descanso', descanso]]) {
+    const input = ejercicio.getByLabel(etiqueta, { exact: true });
+    await input.fill(valor);
+    await input.blur();
+  }
+}
+
+async function estructuraDelDia(ctx: BrowserContext, dia = 0): Promise<string[][]> {
+  const rutinas = await rutinasEnServidor(ctx);
+  return rutinas[0]?.dias[dia]?.ejercicios.map((e) => [e.nombre, e.series, e.reps, e.descanso]) ?? [];
+}
+
+test('tras elegir un ejercicio el foco queda en el primer campo del ejercicio nuevo', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se11'));
+  const editor = await crearRutina(page, 'Rutina de foco');
+
+  await agregarEjercicio(editor, 'Press banca');
+  await expect(editor.locator('.ejercicio')).toHaveCount(1);
+  await expect(editor.getByLabel('Ejercicio', { exact: true })).toBeFocused();
+  await ctx.close();
+});
+
+test('en escritorio un clic en el fondo cierra la hoja y el foco vuelve a «Agregar ejercicio»', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se12'));
+  const editor = await crearRutina(page, 'Rutina de fondo');
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  const boton = editor.getByRole('button', { name: 'Agregar ejercicio' });
+  const hoja = await abrirHoja(editor);
+  await page.mouse.click(5, 5);
+  await expect(hoja).toHaveCount(0);
+  await expect(boton).toBeFocused();
+  await expect(editor.locator('.ejercicio')).toHaveCount(0);
+  await ctx.close();
+});
+
+test('arrastrar una selección de texto desde el buscador hasta soltar sobre el fondo no cierra la hoja', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se13'));
+  const editor = await crearRutina(page, 'Rutina de arrastre');
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  const hoja = await abrirHoja(editor);
+  await buscador(hoja).fill('press banca');
+  const caja = await buscador(hoja).boundingBox();
+  if (!caja) throw new Error('El buscador no tiene caja visible');
+  await page.mouse.move(caja.x + 200, caja.y + caja.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(5, 5, { steps: 8 });
+  await page.mouse.up();
+
+  const seleccionados = await buscador(hoja).evaluate((el: HTMLInputElement) => (el.selectionEnd ?? 0) - (el.selectionStart ?? 0));
+  expect(seleccionados).toBeGreaterThan(0);
+  await expect(hoja.getByRole('heading', { name: 'Elegir ejercicio' })).toBeVisible();
+  await expect(buscador(hoja)).toHaveValue('press banca');
+  await expect(editor.locator('.ejercicio')).toHaveCount(0);
+  await ctx.close();
+});
+
+test('un nombre creado con una falta y corregido después muestra la foto del ejercicio', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se14'));
+  const editor = await crearRutina(page, 'Rutina de corrección');
+
+  await agregarEjercicio(editor, 'Sentadila');
+  const campo = editor.getByLabel('Ejercicio', { exact: true });
+  await expect(campo).toHaveValue('Sentadila');
+  await expect(editor.locator('img.foto-ejercicio')).toHaveCount(0);
+
+  await campo.fill('Sentadilla');
+  const foto = editor.locator('img.foto-ejercicio');
+  await expect(foto).toBeVisible();
+  await expect(foto).toHaveAttribute('alt', 'Sentadilla');
+  await expect.poll(() => foto.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await ctx.close();
+});
+
+test('Enter con la búsqueda vacía no inserta nada y la hoja sigue abierta', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se15'));
+  const editor = await crearRutina(page, 'Rutina de Enter vacío');
+
+  const hoja = await abrirHoja(editor);
+  await expect(buscador(hoja)).toHaveValue('');
+  await page.keyboard.press('Enter');
+  await buscador(hoja).fill('   ');
+  await page.keyboard.press('Enter');
+
+  await expect(hoja.getByRole('heading', { name: 'Elegir ejercicio' })).toBeVisible();
+  await expect(buscador(hoja)).toBeFocused();
+  await expect(editor.locator('.ejercicio')).toHaveCount(0);
+  await expect.poll(() => ejerciciosDelDia(ctx)).toEqual([]);
+  await ctx.close();
+});
+
+test('Enter prefiere la coincidencia exacta sobre un reciente que solo empieza por el texto', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se16'));
+  const editor = await crearRutina(page, 'Rutina de coincidencia exacta');
+
+  await agregarEjercicio(editor, 'Sentadilla goblet');
+  await expect.poll(() => ejerciciosDelDia(ctx)).toEqual(['Sentadilla goblet']);
+
+  const hoja = await abrirHoja(editor);
+  await buscador(hoja).fill('sentadilla');
+  await expect(hoja.locator('.selector-opcion').first()).toHaveText('Sentadilla');
+  await page.keyboard.press('Enter');
+  await expect(hoja).toHaveCount(0);
+  await expect.poll(() => ejerciciosDelDia(ctx)).toEqual(['Sentadilla goblet', 'Sentadilla']);
+  await ctx.close();
+});
+
+test('con dos ejercicios en el día, el nuevo hereda los valores del último y no los del primero', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se17'));
+  const editor = await crearRutina(page, 'Rutina de último');
+
+  await agregarEjercicio(editor, 'Press banca');
+  await ponerValores(editor.locator('.ejercicio').nth(0), '5', '6-8', '120s');
+  await agregarEjercicio(editor, 'Remo con barra');
+  await ponerValores(editor.locator('.ejercicio').nth(1), '4', '12', '90s');
+  await expect
+    .poll(() => estructuraDelDia(ctx))
+    .toEqual([
+      ['Press banca', '5', '6-8', '120s'],
+      ['Remo con barra', '4', '12', '90s'],
+    ]);
+
+  await agregarEjercicio(editor, 'Peso muerto');
+  await expect(editor.locator('.ejercicio')).toHaveCount(3);
+  await expect
+    .poll(() => estructuraDelDia(ctx))
+    .toEqual([
+      ['Press banca', '5', '6-8', '120s'],
+      ['Remo con barra', '4', '12', '90s'],
+      ['Peso muerto', '4', '12', '90s'],
+    ]);
+  await ctx.close();
+});
+
+test('un día vacío usa 3, 10 y 60s aunque otro día tenga ejercicios con otros valores', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se18'));
+  const editor = await crearRutina(page, 'Rutina de día vacío');
+  await editor.getByRole('button', { name: 'Agregar día' }).click();
+  await expect(editor.locator('.dia-rutina')).toHaveCount(2);
+  await expect.poll(async () => (await rutinasEnServidor(ctx))[0]?.dias.length).toBe(2);
+
+  const dias = editor.locator('.dia-rutina');
+  await agregarEjercicio(editor, 'Press banca', dias.nth(0));
+  await ponerValores(dias.nth(0).locator('.ejercicio').first(), '5', '6-8', '120s');
+  await expect.poll(() => estructuraDelDia(ctx, 0)).toEqual([['Press banca', '5', '6-8', '120s']]);
+
+  await agregarEjercicio(editor, 'Remo con barra', dias.nth(1));
+  await expect.poll(() => estructuraDelDia(ctx, 1)).toEqual([['Remo con barra', '3', '10', '60s']]);
+  await ctx.close();
+});
+
+test('si el último ejercicio tiene las series vacías, el nuevo usa 3 y hereda lo demás', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se19'));
+  const editor = await crearRutina(page, 'Rutina de series vacías');
+
+  await agregarEjercicio(editor, 'Press banca');
+  await ponerValores(editor.locator('.ejercicio').first(), '', '6-8', '120s');
+  await expect.poll(() => estructuraDelDia(ctx)).toEqual([['Press banca', '', '6-8', '120s']]);
+
+  await agregarEjercicio(editor, 'Remo con barra');
+  await expect(editor.locator('.ejercicio')).toHaveCount(2);
+  await expect
+    .poll(() => estructuraDelDia(ctx))
+    .toEqual([
+      ['Press banca', '', '6-8', '120s'],
+      ['Remo con barra', '3', '6-8', '120s'],
+    ]);
+  await ctx.close();
+});
+
+test('escribir «Press  banca» con doble espacio no ofrece crear un ejercicio que ya existe', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se20'));
+  const editor = await crearRutina(page, 'Rutina de doble espacio');
+
+  const hoja = await abrirHoja(editor);
+  await buscador(hoja).fill('Press  banca');
+  await expect(hoja.getByRole('button', { name: 'Press banca', exact: true })).toBeVisible();
+  await expect(hoja.getByRole('button', { name: /^Crear/ })).toHaveCount(0);
+  await expect(hoja.locator('[role=status]')).not.toContainText('Sin coincidencias');
+  await ctx.close();
+});
+
+test('el buscador recorta a 80 caracteres lo que se escribe', async ({ browser }) => {
+  const ctx = await dispositivo(browser);
+  const page = await ctx.newPage();
+  await registrar(page, correo('se21'));
+  const editor = await crearRutina(page, 'Rutina de largo máximo');
+
+  const hoja = await abrirHoja(editor);
+  await buscador(hoja).fill('a'.repeat(120));
+  await expect(buscador(hoja)).toHaveValue('a'.repeat(80));
+  await ctx.close();
+});
