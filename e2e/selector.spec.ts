@@ -190,7 +190,7 @@ test('un ejercicio nuevo hereda series, reps y descanso del anterior y un día v
   await agregarEjercicio(editor, 'Press banca');
   await expect.poll(estructura).toEqual([['Press banca', '3', '10', '60s']]);
 
-  const primero = editor.locator('.ejercicio').first();
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
   for (const [etiqueta, valor] of [['Series', '5'], ['Reps', '6-8'], ['Descanso', '120s']]) {
     const input = primero.getByLabel(etiqueta, { exact: true });
     await input.fill(valor);
@@ -306,7 +306,8 @@ test('escribir en el buscador no retira la fila «Quitado · Deshacer» pendient
   await agregarEjercicio(editor, 'Remo con barra');
   await expect(editor.locator('.ejercicio')).toHaveCount(2);
 
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await primero.getByRole('button', { name: 'Quitar ejercicio' }).click();
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Press banca/);
 
@@ -325,7 +326,17 @@ test('escribir en el buscador no retira la fila «Quitado · Deshacer» pendient
   await ctx.close();
 });
 
+// Solo hay una fila abierta a la vez: abre la del ejercicio y espera a que exista su cuerpo.
+async function abrirEjercicio(ejercicio: Locator): Promise<Locator> {
+  const cabecera = ejercicio.locator('button[aria-expanded]');
+  if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
+  await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
+  await expect(ejercicio.getByLabel('Ejercicio', { exact: true })).toBeVisible();
+  return ejercicio;
+}
+
 async function ponerValores(ejercicio: Locator, series: string, reps: string, descanso: string): Promise<void> {
+  await abrirEjercicio(ejercicio);
   for (const [etiqueta, valor] of [['Series', series], ['Reps', reps], ['Descanso', descanso]]) {
     const input = ejercicio.getByLabel(etiqueta, { exact: true });
     await input.fill(valor);

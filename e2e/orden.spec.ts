@@ -115,17 +115,31 @@ async function prepararDosDias(editor: Locator, ctx: BrowserContext, lunes: stri
   await expect.poll(() => ordenEnServidor(ctx)).toEqual([lunes, martes]);
 }
 
+// Nombres de los ejercicios del día, en orden, tal como los muestra cada cabecera plegada.
 async function valoresDeEjercicios(dia: Locator): Promise<string[]> {
-  return dia.locator('.ejercicio').getByLabel('Ejercicio', { exact: true }).evaluateAll((campos) =>
-    campos.map((c) => (c as HTMLInputElement).value),
-  );
+  return dia.locator('.ejercicio .ejercicio-nombre').evaluateAll((nombres) => nombres.map((n) => n.textContent?.trim() ?? ''));
+}
+
+// Solo hay una fila abierta a la vez: abre la del ejercicio y espera a que exista su cuerpo.
+async function abrirEjercicio(ejercicio: Locator): Promise<Locator> {
+  const cabecera = ejercicio.locator('button[aria-expanded]');
+  if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
+  await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
+  await expect(ejercicio.getByLabel('Ejercicio', { exact: true })).toBeVisible();
+  return ejercicio;
 }
 
 const anuncio = (editor: Locator): Locator => editor.locator('div.sr-only[role=status]');
 const botonDe = (ejercicio: Locator, nombre: string): Locator => ejercicio.getByRole('button', { name: nombre });
+// Botón que vive en el cuerpo del ejercicio: abre la fila antes de pulsarlo.
+async function pulsarEnFila(ejercicio: Locator, nombre: string): Promise<void> {
+  await abrirEjercicio(ejercicio);
+  await botonDe(ejercicio, nombre).click();
+}
 
 // Elige el día en el selector del ejercicio y pulsa Mover.
 async function moverADia(ejercicio: Locator, dia: string): Promise<void> {
+  await abrirEjercicio(ejercicio);
   await ejercicio.locator('select[data-orden=dia]').selectOption({ label: dia });
   await ejercicio.locator('[data-orden=mover]').click();
 }
@@ -140,9 +154,10 @@ test('duplicar un ejercicio deja la copia justo debajo con el foco en su primer 
 
   const dia = editor.locator('.dia-rutina').first();
   const ejercicios = dia.locator('.ejercicio');
+  await abrirEjercicio(ejercicios.nth(0));
   await dia.locator('.ejercicio').nth(0).getByLabel('Series', { exact: true }).fill('4');
   await dia.locator('.ejercicio').nth(0).getByLabel('Series', { exact: true }).blur();
-  await botonDe(ejercicios.nth(0), 'Duplicar Press banca').click();
+  await pulsarEnFila(ejercicios.nth(0), 'Duplicar Press banca');
 
   await expect(ejercicios).toHaveCount(4);
   expect(await valoresDeEjercicios(dia)).toEqual(['Press banca', 'Press banca', 'Remo con barra', 'Peso muerto']);
@@ -282,6 +297,7 @@ test('mover un ejercicio a otro día lo deja al final de ese día y el foco qued
   const lunes = dias.nth(0);
   const martes = dias.nth(1);
 
+  await abrirEjercicio(lunes.locator('.ejercicio').nth(1));
   const selector = lunes.locator('.ejercicio').nth(1).locator('select[data-orden=dia]');
   await expect(selector.locator('option')).toHaveText(['Mover al día…', 'Martes']);
   await selector.selectOption({ label: 'Martes' });
@@ -323,7 +339,7 @@ test('cada movimiento y cada copia se anuncia en la región viva con su posició
   await moverADia(lunes.nth(2), 'Martes');
   await expect(region).toHaveText('Peso muerto movida a la posición 2 de 2');
 
-  await botonDe(lunes.nth(0), 'Duplicar Press banca').click();
+  await pulsarEnFila(lunes.nth(0), 'Duplicar Press banca');
   await expect(region).toHaveText('Press banca duplicado');
 
   await dias.nth(0).getByRole('button', { name: 'Duplicar día Lunes' }).click();
@@ -345,15 +361,15 @@ test('duplicar o subir un ejercicio retira la fila de lo quitado y ya no se pued
   const ejercicios = editor.locator('.dia-rutina').first().locator('.ejercicio');
   const fila = editor.locator('.fila-quitado');
 
-  await botonDe(ejercicios.nth(1), 'Quitar ejercicio').click();
+  await pulsarEnFila(ejercicios.nth(1), 'Quitar ejercicio');
   await expect(fila).toHaveText(/Quitado · Plancha/);
   await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Zancadas', 'Burpees']]);
-  await botonDe(ejercicios.nth(1), 'Duplicar Burpees').click();
+  await pulsarEnFila(ejercicios.nth(1), 'Duplicar Burpees');
   await expect(fila).toHaveCount(0);
   await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
   await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Zancadas', 'Burpees', 'Burpees']]);
 
-  await botonDe(ejercicios.nth(0), 'Quitar ejercicio').click();
+  await pulsarEnFila(ejercicios.nth(0), 'Quitar ejercicio');
   await expect(fila).toHaveText(/Quitado · Zancadas/);
   await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Burpees', 'Burpees']]);
   await ejercicios.nth(1).locator('[data-orden=subir]').click();
@@ -374,21 +390,21 @@ test('mover a otro día o duplicar un día o la rutina retira la fila de lo quit
   const lunes = dias.nth(0).locator('.ejercicio');
   const fila = editor.locator('.fila-quitado');
 
-  await botonDe(lunes.nth(1), 'Quitar ejercicio').click();
+  await pulsarEnFila(lunes.nth(1), 'Quitar ejercicio');
   await expect(fila).toHaveText(/Quitado · Elevaciones laterales/);
   await moverADia(lunes.nth(1), 'Martes');
   await expect(fila).toHaveCount(0);
   await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
   await expect.poll(() => ordenEnServidor(ctx)).toEqual([['Press militar'], ['Curl de bíceps', 'Face pull']]);
 
-  await botonDe(lunes.nth(0), 'Quitar ejercicio').click();
+  await pulsarEnFila(lunes.nth(0), 'Quitar ejercicio');
   await expect(fila).toHaveText(/Quitado · Press militar/);
   await dias.nth(1).getByRole('button', { name: 'Duplicar día Martes' }).click();
   await expect(fila).toHaveCount(0);
   await expect(editor.getByRole('button', { name: /^Deshacer/ })).toHaveCount(0);
   await expect(dias).toHaveCount(3);
 
-  await botonDe(dias.nth(1).locator('.ejercicio').nth(0), 'Quitar ejercicio').click();
+  await pulsarEnFila(dias.nth(1).locator('.ejercicio').nth(0), 'Quitar ejercicio');
   await expect(fila).toHaveText(/Quitado · Curl de bíceps/);
   await editor.getByRole('button', { name: 'Duplicar rutina Rutina con varias filas' }).click();
   await expect(fila).toHaveCount(0);
@@ -406,7 +422,7 @@ test('tras una serie de copias y movimientos el servidor coincide con la pantall
   const dias = editor.locator('.dia-rutina');
   const lunes = dias.nth(0).locator('.ejercicio');
 
-  await botonDe(lunes.nth(1), 'Duplicar Remo con barra').click();
+  await pulsarEnFila(lunes.nth(1), 'Duplicar Remo con barra');
   await expect(lunes).toHaveCount(4);
   await botonDe(lunes.nth(0), 'Bajar Press banca').click();
   await expect(lunes.nth(1).getByLabel('Ejercicio', { exact: true })).toHaveValue('Press banca');
@@ -450,7 +466,7 @@ test('elegir un día en el selector no mueve el ejercicio hasta pulsar Mover', a
   const dias = editor.locator('.dia-rutina');
   const lunes = dias.nth(0);
   const martes = dias.nth(1);
-  const ejercicio = lunes.locator('.ejercicio').nth(1);
+  const ejercicio = await abrirEjercicio(lunes.locator('.ejercicio').nth(1));
   const selector = ejercicio.locator('select[data-orden=dia]');
 
   // Con el selector cerrado, la flecha abajo cambia la opción elegida sin abrir la lista.
@@ -480,7 +496,7 @@ test('pulsar Mover sin haber elegido un día no hace nada', async ({ browser }) 
   await prepararDosDias(editor, ctx, ['Press banca', 'Remo con barra'], ['Dominadas']);
 
   const dias = editor.locator('.dia-rutina');
-  const ejercicio = dias.nth(0).locator('.ejercicio').nth(0);
+  const ejercicio = await abrirEjercicio(dias.nth(0).locator('.ejercicio').nth(0));
   await expect(ejercicio.locator('select[data-orden=dia]')).toHaveValue('');
   await ejercicio.locator('[data-orden=mover]').click();
 
@@ -513,13 +529,13 @@ test('duplicar dos veces el mismo ejercicio vuelve a anunciar duplicado cada vez
   });
   const anteriores = () => page.evaluate(() => (window as unknown as { textosAnteriores: string[] }).textosAnteriores);
 
-  await botonDe(ejercicios.nth(0), 'Duplicar Press banca').click();
+  await pulsarEnFila(ejercicios.nth(0), 'Duplicar Press banca');
   await expect(ejercicios).toHaveCount(2);
   await expect(region).toHaveText('Press banca duplicado');
   await page.evaluate(() => ((window as unknown as { textosAnteriores: string[] }).textosAnteriores.length = 0));
 
   // La segunda vez el texto es idéntico: debe pasar a vacío y volver al texto.
-  await botonDe(ejercicios.nth(0), 'Duplicar Press banca').click();
+  await pulsarEnFila(ejercicios.nth(0), 'Duplicar Press banca');
   await expect(ejercicios).toHaveCount(3);
   await expect.poll(anteriores).toEqual(['Press banca duplicado', '']);
   await expect(region).toHaveText('Press banca duplicado');

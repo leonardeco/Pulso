@@ -97,10 +97,18 @@ async function ponerEjercicios(editor: Locator, nombres: string[]): Promise<void
   }
 }
 
+// Nombres de los ejercicios del día, en orden, tal como los muestra cada cabecera plegada.
 async function valoresDeEjercicios(dia: Locator): Promise<string[]> {
-  return dia.locator('.ejercicio').getByLabel('Ejercicio', { exact: true }).evaluateAll((campos) =>
-    campos.map((c) => (c as HTMLInputElement).value),
-  );
+  return dia.locator('.ejercicio .ejercicio-nombre').evaluateAll((nombres) => nombres.map((n) => n.textContent?.trim() ?? ''));
+}
+
+// Solo hay una fila abierta a la vez: abre la del ejercicio y espera a que exista su cuerpo.
+async function abrirEjercicio(ejercicio: Locator): Promise<Locator> {
+  const cabecera = ejercicio.locator('button[aria-expanded]');
+  if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
+  await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
+  await expect(ejercicio.getByLabel('Ejercicio', { exact: true })).toBeVisible();
+  return ejercicio;
 }
 
 async function abrirFicha(page: Page, nombre: string): Promise<void> {
@@ -118,7 +126,8 @@ test('un ejercicio quitado vuelve a su misma posición al pulsar Deshacer', asyn
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Press banca', 'Remo con barra', 'Peso muerto']);
 
   const dia = editor.locator('.dia-rutina').first();
-  await dia.locator('.ejercicio').nth(1).getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const abierto = await abrirEjercicio(dia.locator('.ejercicio').nth(1));
+  await abierto.getByRole('button', { name: 'Quitar ejercicio' }).click();
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Remo con barra/);
   await expect(fila).toHaveAttribute('role', 'status');
@@ -179,7 +188,8 @@ test('pasados 10 segundos la fila de lo quitado desaparece y ya no se puede desh
   await ponerEjercicios(editor, ['Dominadas', 'Fondos']);
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Dominadas', 'Fondos']);
 
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await primero.getByRole('button', { name: 'Quitar ejercicio' }).click();
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Dominadas/);
 
@@ -206,7 +216,8 @@ test('con el cursor sobre la fila el plazo no vence y al salir la fila desaparec
   await ponerEjercicios(editor, ['Remo con mancuerna', 'Elevaciones laterales']);
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Remo con mancuerna', 'Elevaciones laterales']);
 
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await primero.getByRole('button', { name: 'Quitar ejercicio' }).click();
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Remo con mancuerna/);
 
@@ -235,11 +246,13 @@ test('quitar con el teclado deja el foco en Deshacer y quitar con clic no lo mue
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Prensa', 'Extensiones', 'Curl femoral']);
 
   const fila = editor.locator('.fila-quitado');
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).press('Enter');
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await primero.getByRole('button', { name: 'Quitar ejercicio' }).press('Enter');
   await expect(fila).toHaveText(/Quitado · Prensa/);
   await expect(editor.getByRole('button', { name: 'Deshacer: Prensa' })).toBeFocused();
 
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const siguiente = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await siguiente.getByRole('button', { name: 'Quitar ejercicio' }).click();
   await expect(fila).toHaveText(/Quitado · Extensiones/);
   // Se espera a que la pantalla termine de pintar para comprobar que el foco no se movió.
   await page.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
@@ -257,7 +270,8 @@ test('tras Deshacer con el teclado el foco queda dentro del ejercicio devuelto',
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Press inclinado', 'Aperturas', 'Fondos en paralelas']);
 
   const dia = editor.locator('.dia-rutina').first();
-  await dia.locator('.ejercicio').nth(1).getByRole('button', { name: 'Quitar ejercicio' }).press('Enter');
+  const aperturas = await abrirEjercicio(dia.locator('.ejercicio').nth(1));
+  await aperturas.getByRole('button', { name: 'Quitar ejercicio' }).press('Enter');
   const deshacer = editor.getByRole('button', { name: 'Deshacer: Aperturas' });
   await expect(deshacer).toBeFocused();
   await deshacer.press('Enter');
@@ -265,8 +279,10 @@ test('tras Deshacer con el teclado el foco queda dentro del ejercicio devuelto',
   await expect(editor.locator('.fila-quitado')).toHaveCount(0);
   await expect(dia.locator('.ejercicio')).toHaveCount(3);
   const devuelto = dia.locator('.ejercicio').nth(1);
-  await expect(devuelto.getByLabel('Ejercicio', { exact: true })).toHaveValue('Aperturas');
+  // El foco se comprueba antes de abrir la fila devuelta, que vuelve plegada.
   await expect(devuelto.locator(':focus')).toHaveCount(1);
+  await abrirEjercicio(devuelto);
+  await expect(devuelto.getByLabel('Ejercicio', { exact: true })).toHaveValue('Aperturas');
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Press inclinado', 'Aperturas', 'Fondos en paralelas']);
   await ctx.close();
 });
@@ -279,11 +295,13 @@ test('escribir en Series hace desaparecer la fila sin salir del campo y el servi
   await ponerEjercicios(editor, ['Hombro posterior', 'Face pull']);
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Hombro posterior', 'Face pull']);
 
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await primero.getByRole('button', { name: 'Quitar ejercicio' }).click();
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Hombro posterior/);
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Face pull']);
 
+  await abrirEjercicio(editor.locator('.ejercicio').first());
   const series = editor.locator('.ejercicio').first().getByLabel('Series', { exact: true });
   await series.fill('5');
   await expect(series).toBeFocused();
@@ -308,7 +326,8 @@ test('hacer otro cambio hace desaparecer la fila de lo quitado y ya no se puede 
   await ponerEjercicios(editor, ['Zancadas', 'Plancha']);
   await expect.poll(() => nombresDeEjercicios(ctx)).toEqual(['Zancadas', 'Plancha']);
 
-  await editor.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const primero = await abrirEjercicio(editor.locator('.ejercicio').first());
+  await primero.getByRole('button', { name: 'Quitar ejercicio' }).click();
   const fila = editor.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Zancadas/);
 
@@ -357,7 +376,8 @@ test('si otro dispositivo guardó antes, el servidor rechaza el cambio y la fila
     return ruta.fallback();
   });
 
-  await editorA.locator('.ejercicio').first().getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const primeroA = await abrirEjercicio(editorA.locator('.ejercicio').first());
+  await primeroA.getByRole('button', { name: 'Quitar ejercicio' }).click();
   await avisoLlegada;
   const fila = editorA.locator('.fila-quitado');
   await expect(fila).toHaveText(/Quitado · Curl de bíceps/);

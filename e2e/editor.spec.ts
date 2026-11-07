@@ -107,6 +107,15 @@ async function agregarEjercicio(editor: Locator, nombre: string, dia: Locator = 
   await expect(hoja).toHaveCount(0);
 }
 
+// Solo hay una fila abierta a la vez: abre la del ejercicio y espera a que exista su cuerpo.
+async function abrirEjercicio(ejercicio: Locator): Promise<Locator> {
+  const cabecera = ejercicio.locator('button[aria-expanded]');
+  if ((await cabecera.getAttribute('aria-expanded')) !== 'true') await cabecera.click();
+  await expect(cabecera).toHaveAttribute('aria-expanded', 'true');
+  await expect(ejercicio.getByLabel('Ejercicio', { exact: true })).toBeVisible();
+  return ejercicio;
+}
+
 async function campo(editor: Locator, etiqueta: string, valor: string): Promise<void> {
   const input = editor.getByLabel(etiqueta, { exact: true });
   await input.fill(valor);
@@ -140,6 +149,7 @@ test('en rutinas, nombre, precio, día y ejercicio editados persisten tras recar
     .toEqual(['Fuerza tren inferior', 45000, 'Lunes', 'Peso muerto', '4', '8-10', '90s']);
 
   const abierto = await abrirRutina(pa, 'Fuerza tren inferior');
+  await abrirEjercicio(abierto.locator('.ejercicio').first());
   await expect(abierto.getByLabel('Nombre de la rutina')).toHaveValue('Fuerza tren inferior');
   await expect(abierto.getByLabel('Precio', { exact: true })).toHaveValue('45000');
   await expect(abierto.getByLabel('Día', { exact: true })).toHaveValue('Lunes');
@@ -168,10 +178,12 @@ test('en la ficha del cliente, un ejercicio agregado y quitado queda igual que e
 
   const desdeRutinas = await abrirRutina(pa, 'Rutina de ficha');
   await expect(desdeRutinas.locator('.ejercicio')).toHaveCount(1);
+  await abrirEjercicio(desdeRutinas.locator('.ejercicio').first());
   await expect(desdeRutinas.getByLabel('Ejercicio', { exact: true })).toHaveValue('Sentadilla');
 
   await abrirFichaRutina(pa, 'Cliente Ficha');
-  await pa.locator('app-editor-rutina').getByRole('button', { name: 'Quitar ejercicio' }).click();
+  const fila = await abrirEjercicio(pa.locator('app-editor-rutina .ejercicio').first());
+  await fila.getByRole('button', { name: 'Quitar ejercicio' }).click();
   await expect(pa.locator('app-editor-rutina .ejercicio')).toHaveCount(0);
   await expect
     .poll(async () => (await rutinasEnServidor(a))[0]?.dias[0]?.ejercicios.length)
